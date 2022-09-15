@@ -16,7 +16,7 @@
 #
 
 from re import template
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict
 
 from google.auth import credentials as auth_credentials
 
@@ -35,12 +35,14 @@ import json
 
 _LOGGER = base.Logger(__name__)
 
+MODEL_COMPARISON_PIPELINE = 'model_comparison'
+BQML_ARIMA_TRAIN_PIPELINE = 'bqml_arima_train'
+AUTOML_TABULAR_PIPELINE = 'automl_tabular'
 
 _PIPELINE_TEMPLATES = {
-    "automl_tabular_without_feature_attribution": "gs://vertex-evaluation-templates/20220901_0448/evaluation_automl_tabular_pipeline.json",
-    "automl_tabular_with_feature_attribution": "gs://vertex-evaluation-templates/20220901_0448/evaluation_automl_tabular_feature_attribution_pipeline.json",
-    "other_without_feature_attribution": "gs://vertex-evaluation-templates/20220901_0448/evaluation_pipeline.json",
-    "other_with_feature_attribution": "gs://vertex-evaluation-templates/20220901_0448/evaluation_feature_attribution_pipeline.json",
+    MODEL_COMPARISON_PIPELINE: "gs://cezarym-staging/model_comparison_pipeline.json",
+    BQML_ARIMA_TRAIN_PIPELINE: "gs://cezarym-staging/bqml_arima_train_pipeline.json",
+    AUTOML_TABULAR_PIPELINE: "gs://cezarym-staging/automl_tabular_pipeline.json",
 }
 
 class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
@@ -95,54 +97,29 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
         )
 
     @staticmethod
-    def _get_template_url(
-        model_type: str,
-        feature_attributions: bool,
-        use_experimental_templates: bool,
+    def get_template_url(
+        pipeline: str,
     ) -> str:
-        """Gets the pipeline template URL for this model evaluation job given the type of data
-        used to train the model and whether feature attributions should be generated.
+        """Gets the pipeline template URL for a given pipeline.
 
         Args:
-            data_type (str):
-                Required. The type of data used to train the model.
-            feature_attributions (bool):
-                Required. Whether this evaluation job should generate feature attributions.
+            pipeline (str):
+                Required. Pipeline name.
 
         Returns:
-            (str): The pipeline template URL to use for this model evaluation job.
+            (str): The pipeline template URL.
         """
-        template_type = model_type
 
-        if feature_attributions:
-            template_type += "_with_feature_attribution"
-        else:
-            template_type += "_without_feature_attribution"
-
-        if use_experimental_templates:
-            return _EXPERIMENTAL_EVAL_PIPELINE_TEMPLATES[template_type]
-        else:
-            return _ModelEvaluationJob._template_ref[template_type]
+        return ModelComparisonJob._template_ref.get(pipeline)
 
     @classmethod
     def submit(
         cls,
-        model_name: Union[str, "aiplatform.Model"],
-        prediction_type: str,
-        target_column_name: str,
+        problem_type: str,
+        training_jobs: Dict[str, Dict[str, Any]],
+        data_source_csv_filenames: List[str],
+        data_source_bigquery_table_path: str,
         pipeline_root: str,
-        model_type: str,
-        gcs_source_uris: Optional[List[str]] = None,
-        bigquery_source_uri: Optional[str] = None,
-        batch_predict_bigquery_destination_output_uri: Optional[str] = None, # TODO: docstring
-        class_names: Optional[List[str]] = None,
-        key_columns: Optional[List[str]] = None,
-        prediction_label_column: Optional[str] = None, # TODO: add docstrings for both of these
-        prediction_score_column: Optional[str] = None,
-        generate_feature_attributions: Optional[bool] = False,
-        instances_format: Optional[str] = "jsonl",
-        evaluation_pipeline_display_name: Optional[str] = None,
-        evaluation_metrics_display_name: Optional[str] = None,
         job_id: Optional[str] = None,
         service_account: Optional[str] = None,
         network: Optional[str] = None,
@@ -151,10 +128,9 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
         location: Optional[str] = None,
         credentials: Optional[auth_credentials.Credentials] = None,
         experiment: Optional[Union[str, "aiplatform.Experiment"]] = None,
-        use_experimental_templates: Optional[bool] = False,
-    ) -> "_ModelEvaluationJob":
-        """Submits a Model Evaluation Job using aiplatform.PipelineJob and returns
-        the ModelEvaluationJob resource.
+    ) -> "ModelComparisonJob":
+        """Submits a Model Comparison Job using aiplatform.PipelineJob and returns
+        the ModelComparisonJob resource.
 
         Example usage:
         my_evaluation = _ModelEvaluationJob.submit(
@@ -175,62 +151,17 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
             instances_format="jsonl",
         )
         Args:
-            model_name (Union[str, "aiplatform.Model"]):
-                Required. An instance of aiplatform.Model or a fully-qualified model resource name or model ID to run the evaluation
-                job on. Example: "projects/123/locations/us-central1/models/456" or
-                "456" when project and location are initialized or passed.
-            prediction_type (str):
-                Required. The type of prediction performed by the Model. One of "classification" or "regression".
-            target_column_name (str):
-                Required. The name of your prediction column.
-            gcs_source_uris (List[str]):
-                Optional. A list of Cloud Storage data files containing the ground truth data to use for this
-                evaluation job. These files should contain your model's prediction column. Currently only Google Cloud Storage
-                urls are supported, for example: "gs://path/to/your/data.csv". The provided data files must be
-                either CSV or JSONL. One of `gcs_source_uris` or `bigquery_source_uri` is required.
-            bigquery_source_uri (str):
-                Optional. A bigquery table URI containing the ground truth data to use for this evaluation job. This uri should
-                be in the format 'bq://my-project-id.dataset.table'. One of `gcs_source_uris` or `bigquery_source_uri` is
-                required.
+            problem_type: The type of problem being solved. Can be one of: regression,
+                binary_classification, multiclass_classification, or forecasting
+                training_jobs: A dict mapping name to a dict of training job inputs.
+            data_source_csv_filenames: Paths to CSVs stored in GCS to use as the dataset
+                for all training pipelines. This should be None if
+                `data_source_bigquery_table_path` is not None.
+            data_source_bigquery_table_path: Path to BigQuery Table to use as the
+                dataset for all training pipelines. This should be None if
+                `data_source_csv_filenames` is not None.
             pipeline_root (str):
                 Required. The GCS directory to store output from the model evaluation PipelineJob.
-            model_type (str):
-                Required. One of "automl_tabular" or "other". This determines the Model Evaluation template used by this PipelineJob.
-            gcs_source_uris (List[str]):
-                Optional. A list of Cloud Storage data files containing the ground truth data to use for this
-                evaluation job. These files should contain your model's prediction column. Currently only Google Cloud Storage
-                urls are supported, for example: "gs://path/to/your/data.csv". The provided data files must be
-                either CSV or JSONL. One of `gcs_source_uris` or `bigquery_source_uri` is required.
-            bigquery_source_uri (str):
-                Optional. A bigquery table URI containing the ground truth data to use for this evaluation job. This uri should
-                be in the format 'bq://my-project-id.dataset.table'. One of `gcs_source_uris` or `bigquery_source_uri` is
-                required.
-            bigquery_destination_output_uri (str):
-                Optional. A bigquery table URI where the Batch Prediction job associated with your Model Evaluation will write
-                prediction output. This can be a BigQuery URI to a project ('bq://my-project'), a dataset
-                ('bq://my-project.my-dataset'), or a table ('bq://my-project.my-dataset.my-table'). Required if `bigquery_source_uri`
-                is provided.
-            class_names (List[str]):
-                Optional. For custom (non-AutoML) classification models, a list of possible class names, in the
-                same order that predictions are generated. This argument is required when prediction_type is 'classification'.
-                For example, in a classification model with 3 possible classes that are outputted in the format: [0.97, 0.02, 0.01]
-                with the class names "cat", "dog", and "fish", the value of `class_names` should be `["cat", "dog", "fish"]` where
-                the class "cat" corresponds with 0.97 in the example above.
-            key_columns (str):
-                Optional. The column headers in the data files provided to gcs_source_uris, in the order the columns
-                appear in the file. This argument is required for custom models and AutoML Vision, Text, and Video models.
-            prediction_label_column (str):
-                Optional.
-            prediction_score_column (str):
-                Optional.
-            generate_feature_attributions (boolean):
-                Optional. Whether the model evaluation job should generate feature attributions. Defaults to False if not specified.
-            instances_format (str):
-                The format in which instances are given, must be one of the Model's supportedInputStorageFormats. If not set, defaults to "jsonl".
-            evaluation_pipeline_display_name (str)
-                Optional. The user-defined name of the PipelineJob created by this Pipeline Based Service.
-            evaluation_metrics_display_name (str)
-                Optional. The user-defined name of the evaluation metrics resource uploaded to Vertex in the evaluation pipeline job.
             job_id (str):
                 Optional. The unique ID of the job run.
                 If not specified, pipeline name + timestamp will be used.
@@ -262,14 +193,8 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
                 Optional. The Vertex AI experiment name or instance to associate to the PipelineJob executing
                 this model evaluation job.
         Returns:
-            (ModelEvaluationJob): Instantiated represnetation of the model evaluation job.
+            (ModelComparisonJob): Instantiated represnetation of the model comparison job.
         """
-
-        if isinstance(model_name, aiplatform.Model):
-            model_resource_name = model_name.resource_name
-        else:
-            model_resource_name = model_name
-
         if not evaluation_pipeline_display_name:
             evaluation_pipeline_display_name = cls._generate_display_name()
 
@@ -286,22 +211,6 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
             "encryption_spec_key_name": encryption_spec_key_name,
         }
 
-        if bigquery_source_uri:
-            template_params["batch_predict_predictions_format"] = "bigquery"
-            template_params["batch_predict_bigquery_source_uri"] = bigquery_source_uri
-            template_params["batch_predict_bigquery_destination_output_uri"] = batch_predict_bigquery_destination_output_uri
-        elif gcs_source_uris:
-            template_params["batch_predict_gcs_source_uris"] = gcs_source_uris
-
-        if prediction_type == "classification" and model_type == "other" and class_names is not None:
-            template_params["evaluation_class_names"] = class_names
-
-        if prediction_label_column:
-            template_params["evaluation_prediction_label_column"] = prediction_label_column
-
-        if prediction_score_column:
-            template_params["evaluation_prediction_score_column"] = prediction_score_column
-        
         # If the user provides a SA, use it for the Dataflow job as well
         if service_account is not None:
             template_params["dataflow_service_account"] = service_account
@@ -310,10 +219,7 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
                 model_type, generate_feature_attributions, use_experimental_templates
         )
 
-        if use_experimental_templates:
-            _LOGGER.info(f"Using experimental pipeline template: {template_url}")
-
-        eval_pipeline_run = cls._create_and_submit_pipeline_job(
+        comparison_pipeline_run = cls._create_and_submit_pipeline_job(
             template_params=template_params,
             template_path=template_url,
             pipeline_root=pipeline_root,
@@ -329,55 +235,55 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
         )
 
         _LOGGER.info(
-            f"{_ModelEvaluationJob._creation_log_message} View it in the console: {eval_pipeline_run.pipeline_console_uri}"
+            f"{ModelComparisonJob._creation_log_message} View it in the console: {comparison_pipeline_run.pipeline_console_uri}"
         )
 
-        return eval_pipeline_run
+        return comparison_pipeline_run
 
-    def get_model_evaluation(
-        self,
-    ) -> Optional["model_evaluation.ModelEvaluation"]:
-        """Gets the ModelEvaluation created by this ModelEvlauationJob.
+    # def get_model_evaluation(
+    #     self,
+    # ) -> Optional["model_evaluation.ModelEvaluation"]:
+    #     """Gets the ModelEvaluation created by this ModelEvlauationJob.
 
-        Returns:
-            aiplatform.ModelEvaluation: Instantiated representation of the ModelEvaluation resource.
-        Raises:
-            RuntimeError: If the ModelEvaluationJob pipeline failed.
-        """
-        eval_job_state = self.backing_pipeline_job.state
+    #     Returns:
+    #         aiplatform.ModelEvaluation: Instantiated representation of the ModelEvaluation resource.
+    #     Raises:
+    #         RuntimeError: If the ModelEvaluationJob pipeline failed.
+    #     """
+    #     eval_job_state = self.backing_pipeline_job.state
 
-        if eval_job_state in pipeline_jobs._PIPELINE_ERROR_STATES:
-            raise RuntimeError(
-                f"Evaluation job failed. For more details see the logs: {self.pipeline_console_uri}"
-            )
-        elif eval_job_state not in pipeline_jobs._PIPELINE_COMPLETE_STATES:
-            _LOGGER.info(
-                f"Your evaluation job is still in progress. For more details see the logs {self.pipeline_console_uri}"
-            )
-        else:
-            for component in self.backing_pipeline_job.task_details:
-                for metadata_key in component.execution.metadata:
-                    if (
-                        metadata_key == "output:gcp_resources"
-                        and json.loads(component.execution.metadata[metadata_key])[
-                            "resources"
-                        ][0]["resourceType"]
-                        == "ModelEvaluation"
-                    ):
-                        eval_resource_uri = json.loads(
-                            component.execution.metadata[metadata_key]
-                        )["resources"][0]["resourceUri"]
-                        eval_resource_name = eval_resource_uri.split("v1/")[1]
+    #     if eval_job_state in pipeline_jobs._PIPELINE_ERROR_STATES:
+    #         raise RuntimeError(
+    #             f"Evaluation job failed. For more details see the logs: {self.pipeline_console_uri}"
+    #         )
+    #     elif eval_job_state not in pipeline_jobs._PIPELINE_COMPLETE_STATES:
+    #         _LOGGER.info(
+    #             f"Your evaluation job is still in progress. For more details see the logs {self.pipeline_console_uri}"
+    #         )
+    #     else:
+    #         for component in self.backing_pipeline_job.task_details:
+    #             for metadata_key in component.execution.metadata:
+    #                 if (
+    #                     metadata_key == "output:gcp_resources"
+    #                     and json.loads(component.execution.metadata[metadata_key])[
+    #                         "resources"
+    #                     ][0]["resourceType"]
+    #                     == "ModelEvaluation"
+    #                 ):
+    #                     eval_resource_uri = json.loads(
+    #                         component.execution.metadata[metadata_key]
+    #                     )["resources"][0]["resourceUri"]
+    #                     eval_resource_name = eval_resource_uri.split("v1/")[1]
 
-                        eval_resource = model_evaluation.ModelEvaluation(
-                            evaluation_name=eval_resource_name
-                        )
+    #                     eval_resource = model_evaluation.ModelEvaluation(
+    #                         evaluation_name=eval_resource_name
+    #                     )
 
-                        eval_resource._gca_resource = eval_resource._get_gca_resource(
-                            resource_name=eval_resource_name
-                        )
+    #                     eval_resource._gca_resource = eval_resource._get_gca_resource(
+    #                         resource_name=eval_resource_name
+    #                     )
 
-                        return eval_resource
+    #                     return eval_resource
 
     def wait(self):
         """Wait for thie PipelineJob to complete."""
