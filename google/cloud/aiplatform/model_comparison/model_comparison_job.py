@@ -15,8 +15,7 @@
 # limitations under the License.
 #
 
-from re import template
-from typing import Optional, List, Union, Dict
+from typing import Any, Optional, List, Union, Dict
 
 from google.auth import credentials as auth_credentials
 
@@ -24,14 +23,11 @@ from google.cloud import aiplatform
 from google.cloud.aiplatform import base
 from google.cloud.aiplatform import initializer
 from google.cloud.aiplatform._pipeline_based_service import pipeline_based_service
-from google.cloud.aiplatform import model_evaluation
 from google.cloud.aiplatform import pipeline_jobs
 
 from google.cloud.aiplatform.compat.types import (
     pipeline_state_v1 as gca_pipeline_state_v1,
 )
-
-import json
 
 _LOGGER = base.Logger(__name__)
 
@@ -53,14 +49,14 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
 
     @property
     def _metadata_output_artifact(self) -> Optional[str]:
-        """The resource uri for the ML Metadata output artifact from the evaluation component of the Model Evaluation pipeline"""
+        """The resource uri for the ML Metadata output artifact from the comparison component of the Model Comparison pipeline"""
         if self.state == gca_pipeline_state_v1.PipelineState.PIPELINE_STATE_SUCCEEDED:
             for task in self.backing_pipeline_job._gca_resource.job_detail.task_details:
                 if (
-                    task.task_name.startswith("model-evaluation")
-                    and "evaluation_metrics" in task.outputs
+                    task.task_name.startswith("model-comparison")
+                    and "comparison_metrics" in task.outputs
                 ):
-                    return task.outputs["evaluation_metrics"].artifacts[0].name
+                    return task.outputs["comparison_metrics"].artifacts[0].name
 
     def __init__(
         self,
@@ -121,6 +117,7 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
         data_source_bigquery_table_path: str,
         pipeline_root: str,
         job_id: Optional[str] = None,
+        comparison_pipeline_display_name: Optional[str] = None,
         service_account: Optional[str] = None,
         network: Optional[str] = None,
         encryption_spec_key_name: Optional[str] = None,
@@ -133,8 +130,7 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
         the ModelComparisonJob resource.
 
         Example usage:
-        my_evaluation = _ModelEvaluationJob.submit(
-            model="projects/123/locations/us-central1/models/456",
+        my_comparison = _ModelComparisonJob.submit(
             prediction_type="classification",
             pipeline_root="gs://my-pipeline-bucket/runpath",
             gcs_source_uris=["gs://test-prediction-data"],
@@ -142,8 +138,7 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
             instances_format="jsonl",
         )
 
-        my_evaluation = _ModelEvaluationJob.submit(
-            model="projects/123/locations/us-central1/models/456",
+        my_comparison = _ModelComparisonJob.submit(
             prediction_type="regression",
             pipeline_root="gs://my-pipeline-bucket/runpath",
             gcs_source_uris=["gs://test-prediction-data"],
@@ -161,14 +156,16 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
                 dataset for all training pipelines. This should be None if
                 `data_source_csv_filenames` is not None.
             pipeline_root (str):
-                Required. The GCS directory to store output from the model evaluation PipelineJob.
+                Required. The GCS directory to store output from the model comparison PipelineJob.
             job_id (str):
                 Optional. The unique ID of the job run.
                 If not specified, pipeline name + timestamp will be used.
+            comparison_pipeline_display_name (str)
+                Optional. The user-defined name of the PipelineJob created by this Pipeline Based Service.
             service_account (str):
-                Specifies the service account for workload run-as account for this Model Evaluation PipelineJob.
+                Specifies the service account for workload run-as account for this Model Comparison PipelineJob.
                 Users submitting jobs must have act-as permission on this run-as account. The service account running
-                this Model Evaluation job needs the following permissions: Dataflow Worker, Storage Admin, Vertex AI User.
+                this Model Comparison job needs the following permissions: Dataflow Worker, Storage Admin, Vertex AI User.
             network (str):
                 The full name of the Compute Engine network to which the job
                 should be peered. For example, projects/12345/global/networks/myVPC.
@@ -178,7 +175,7 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
                 Optional. The Cloud KMS resource identifier of the customer managed encryption key used to protect the job. Has the
                 form: ``projects/my-project/locations/my-region/keyRings/my-kr/cryptoKeys/my-key``. The key needs to be in the same
                 region as where the compute resource is created. If this is set, then all
-                resources created by the PipelineJob for this Model Evaluation will be encrypted with the provided encryption key.
+                resources created by the PipelineJob for this Model Comparison will be encrypted with the provided encryption key.
                 If not specified, encryption_spec of original PipelineJob will be used.
             project (str):
                 Optional. The project to run this PipelineJob in. If not set,
@@ -191,39 +188,31 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
                 Overrides credentials set in aiplatform.init.
             experiment (Union[str, experiments_resource.Experiment]):
                 Optional. The Vertex AI experiment name or instance to associate to the PipelineJob executing
-                this model evaluation job.
+                this model comparison job.
         Returns:
             (ModelComparisonJob): Instantiated represnetation of the model comparison job.
         """
-        if not evaluation_pipeline_display_name:
-            evaluation_pipeline_display_name = cls._generate_display_name()
+        if not comparison_pipeline_display_name:
+            comparison_pipeline_display_name = cls._generate_display_name()
 
         template_params = {
-            "batch_predict_instances_format": instances_format,
-            "evaluation_join_keys": key_columns,
-            "model_name": model_resource_name,
-            "prediction_type": prediction_type,
-            "evaluation_display_name": evaluation_metrics_display_name,
             "project": project or initializer.global_config.project,
             "location": location or initializer.global_config.location,
             "root_dir": pipeline_root,
-            "target_column_name": target_column_name,
-            "encryption_spec_key_name": encryption_spec_key_name,
+            "problem_type": problem_type,
+            "training_jobs": training_jobs,
+            "data_source_csv_filenames": data_source_csv_filenames,
+            "data_source_bigquery_table_path": data_source_bigquery_table_path,
+            "experiment": experiment,
         }
 
-        # If the user provides a SA, use it for the Dataflow job as well
-        if service_account is not None:
-            template_params["dataflow_service_account"] = service_account
-
-        template_url = cls._get_template_url(
-                model_type, generate_feature_attributions, use_experimental_templates
-        )
+        template_url = cls.get_template_url(MODEL_COMPARISON_PIPELINE)
 
         comparison_pipeline_run = cls._create_and_submit_pipeline_job(
             template_params=template_params,
             template_path=template_url,
             pipeline_root=pipeline_root,
-            display_name=evaluation_pipeline_display_name,
+            display_name=comparison_pipeline_display_name,
             job_id=job_id,
             service_account=service_account,
             network=network,
@@ -240,25 +229,25 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
 
         return comparison_pipeline_run
 
-    # def get_model_evaluation(
+    # def get_model_comparison(
     #     self,
-    # ) -> Optional["model_evaluation.ModelEvaluation"]:
-    #     """Gets the ModelEvaluation created by this ModelEvlauationJob.
+    # ) -> Optional["model_comparison.ModelComparison"]:
+    #     """Gets the ModelComparison created by this ModelEvlauationJob.
 
     #     Returns:
-    #         aiplatform.ModelEvaluation: Instantiated representation of the ModelEvaluation resource.
+    #         aiplatform.ModelComparison: Instantiated representation of the ModelComparison resource.
     #     Raises:
-    #         RuntimeError: If the ModelEvaluationJob pipeline failed.
+    #         RuntimeError: If the ModelComparisonJob pipeline failed.
     #     """
     #     eval_job_state = self.backing_pipeline_job.state
 
     #     if eval_job_state in pipeline_jobs._PIPELINE_ERROR_STATES:
     #         raise RuntimeError(
-    #             f"Evaluation job failed. For more details see the logs: {self.pipeline_console_uri}"
+    #             f"Comparison job failed. For more details see the logs: {self.pipeline_console_uri}"
     #         )
     #     elif eval_job_state not in pipeline_jobs._PIPELINE_COMPLETE_STATES:
     #         _LOGGER.info(
-    #             f"Your evaluation job is still in progress. For more details see the logs {self.pipeline_console_uri}"
+    #             f"Your comparison job is still in progress. For more details see the logs {self.pipeline_console_uri}"
     #         )
     #     else:
     #         for component in self.backing_pipeline_job.task_details:
@@ -268,15 +257,15 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
     #                     and json.loads(component.execution.metadata[metadata_key])[
     #                         "resources"
     #                     ][0]["resourceType"]
-    #                     == "ModelEvaluation"
+    #                     == "ModelComparison"
     #                 ):
     #                     eval_resource_uri = json.loads(
     #                         component.execution.metadata[metadata_key]
     #                     )["resources"][0]["resourceUri"]
     #                     eval_resource_name = eval_resource_uri.split("v1/")[1]
 
-    #                     eval_resource = model_evaluation.ModelEvaluation(
-    #                         evaluation_name=eval_resource_name
+    #                     eval_resource = model_comparison.ModelComparison(
+    #                         comparison_name=eval_resource_name
     #                     )
 
     #                     eval_resource._gca_resource = eval_resource._get_gca_resource(
