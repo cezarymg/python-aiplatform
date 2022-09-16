@@ -148,7 +148,7 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
         Args:
             problem_type: The type of problem being solved. Can be one of: regression,
                 binary_classification, multiclass_classification, or forecasting
-                training_jobs: A dict mapping name to a dict of training job inputs.
+            training_jobs: A dict mapping name to a dict of training job inputs.
             data_source_csv_filenames: Paths to CSVs stored in GCS to use as the dataset
                 for all training pipelines. This should be None if
                 `data_source_bigquery_table_path` is not None.
@@ -203,7 +203,7 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
             "training_jobs": training_jobs,
             "data_source_csv_filenames": data_source_csv_filenames,
             "data_source_bigquery_table_path": data_source_bigquery_table_path,
-            "experiment": experiment,
+            "experiment": experiment or '',
         }
 
         template_url = cls.get_template_url(MODEL_COMPARISON_PIPELINE)
@@ -220,7 +220,6 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
             project=project,
             location=location,
             credentials=credentials,
-            experiment=experiment,
         )
 
         _LOGGER.info(
@@ -228,51 +227,6 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
         )
 
         return comparison_pipeline_run
-
-    # def get_model_comparison(
-    #     self,
-    # ) -> Optional["model_comparison.ModelComparison"]:
-    #     """Gets the ModelComparison created by this ModelEvlauationJob.
-
-    #     Returns:
-    #         aiplatform.ModelComparison: Instantiated representation of the ModelComparison resource.
-    #     Raises:
-    #         RuntimeError: If the ModelComparisonJob pipeline failed.
-    #     """
-    #     eval_job_state = self.backing_pipeline_job.state
-
-    #     if eval_job_state in pipeline_jobs._PIPELINE_ERROR_STATES:
-    #         raise RuntimeError(
-    #             f"Comparison job failed. For more details see the logs: {self.pipeline_console_uri}"
-    #         )
-    #     elif eval_job_state not in pipeline_jobs._PIPELINE_COMPLETE_STATES:
-    #         _LOGGER.info(
-    #             f"Your comparison job is still in progress. For more details see the logs {self.pipeline_console_uri}"
-    #         )
-    #     else:
-    #         for component in self.backing_pipeline_job.task_details:
-    #             for metadata_key in component.execution.metadata:
-    #                 if (
-    #                     metadata_key == "output:gcp_resources"
-    #                     and json.loads(component.execution.metadata[metadata_key])[
-    #                         "resources"
-    #                     ][0]["resourceType"]
-    #                     == "ModelComparison"
-    #                 ):
-    #                     eval_resource_uri = json.loads(
-    #                         component.execution.metadata[metadata_key]
-    #                     )["resources"][0]["resourceUri"]
-    #                     eval_resource_name = eval_resource_uri.split("v1/")[1]
-
-    #                     eval_resource = model_comparison.ModelComparison(
-    #                         comparison_name=eval_resource_name
-    #                     )
-
-    #                     eval_resource._gca_resource = eval_resource._get_gca_resource(
-    #                         resource_name=eval_resource_name
-    #                     )
-
-    #                     return eval_resource
 
     def wait(self):
         """Wait for thie PipelineJob to complete."""
