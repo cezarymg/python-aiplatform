@@ -47,6 +47,7 @@ from google.cloud.aiplatform.models import Endpoint
 from google.cloud.aiplatform.models import PrivateEndpoint
 from google.cloud.aiplatform.models import Model
 from google.cloud.aiplatform.models import ModelRegistry
+from google.cloud.aiplatform.model_comparison import ModelComparisonJob
 from google.cloud.aiplatform.model_evaluation import ModelEvaluation
 from google.cloud.aiplatform.jobs import (
     BatchPredictionJob,
@@ -149,6 +150,7 @@ __all__ = (
     "HyperparameterTuningJob",
     "Model",
     "ModelRegistry",
+    "ModelComparisonJob",
     "ModelEvaluation",
     "ModelDeploymentMonitoringJob",
     "PipelineJob",

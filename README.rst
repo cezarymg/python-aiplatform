@@ -306,6 +306,11 @@ Please visit `Importing models to Vertex AI`_ for a detailed overview:
 
 .. _Importing models to Vertex AI: https://cloud.google.com/vertex-ai/docs/general/import-model
 
+Model Comparison
+----------------
+
+<TODO>
+
 Model Evaluation
 ----------------
 
