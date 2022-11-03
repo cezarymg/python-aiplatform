@@ -36,9 +36,17 @@ BQML_ARIMA_TRAIN_PIPELINE = 'bqml_arima_train'
 AUTOML_TABULAR_PIPELINE = 'automl_tabular'
 
 _PIPELINE_TEMPLATES = {
-    MODEL_COMPARISON_PIPELINE: "gs://cezarym-staging/model_comparison_pipeline.json",
-    BQML_ARIMA_TRAIN_PIPELINE: "gs://cezarym-staging/bqml_arima_train_pipeline.json",
-    AUTOML_TABULAR_PIPELINE: "gs://cezarym-staging/automl_tabular_pipeline.json",
+    MODEL_COMPARISON_PIPELINE: (
+    'https://raw.githubusercontent.com/TheMichaelHu/pipelines/mh-update-compare/components'
+    '/google-cloud/google_cloud_pipeline_components/experimental/automl/tabular'
+    '/model_comparison_pipeline.json'),
+    BQML_ARIMA_TRAIN_PIPELINE: ('https://raw.githubusercontent.com/kubeflow/pipelines/master'
+    '/components/google-cloud/google_cloud_pipeline_components/experimental/automl/forecasting'
+    '/bqml_arima_train_pipeline.json'),
+    AUTOML_TABULAR_PIPELINE: (
+    'https://raw.githubusercontent.com/kubeflow/pipelines/06761b945055595de159238bfb00b09822f80520'
+    '/components/google-cloud/google_cloud_pipeline_components/experimental/automl/tabular'
+    '/automl_tabular_pipeline.json'),
 }
 
 class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
@@ -46,6 +54,16 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
     _template_ref = _PIPELINE_TEMPLATES
 
     _creation_log_message = "Created PipelineJob for your Model Comparison."
+
+    @property
+    @classmethod
+    def _component_identifier(cls) -> str:
+        return "fpc-structured-data"
+
+    @property
+    @classmethod
+    def _template_name_identifier(cls) -> Optional[str]:
+        return "model-comparison"
 
     @property
     def _metadata_output_artifact(self) -> Optional[str]:
@@ -113,7 +131,7 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
         cls,
         problem_type: str,
         training_jobs: Dict[str, Dict[str, Any]],
-        data_source_csv_filenames: List[str],
+        data_source_csv_filenames: str,
         data_source_bigquery_table_path: str,
         pipeline_root: str,
         job_id: Optional[str] = None,

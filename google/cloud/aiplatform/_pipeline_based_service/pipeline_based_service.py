@@ -16,35 +16,29 @@
 #
 
 import abc
+import logging
 from typing import (
     Any,
     Dict,
+    FrozenSet,
     Optional,
     List,
+    Tuple,
     Union,
 )
 
 from google.auth import credentials as auth_credentials
 
 from google.cloud import aiplatform
-from google.cloud.aiplatform import base, utils, pipeline_jobs
-from google.cloud.aiplatform.utils import yaml_utils
-
+from google.cloud.aiplatform import base
+from google.cloud.aiplatform import pipeline_jobs
+from google.cloud.aiplatform import utils
 from google.cloud.aiplatform.compat.types import (
-    pipeline_job as gca_pipeline_job,
     pipeline_state as gca_pipeline_state,
 )
+from google.cloud.aiplatform.constants import pipeline as pipeline_constants
 
-import logging
-
-_PIPELINE_COMPLETE_STATES = set(
-    [
-        gca_pipeline_state.PipelineState.PIPELINE_STATE_SUCCEEDED,
-        gca_pipeline_state.PipelineState.PIPELINE_STATE_FAILED,
-        gca_pipeline_state.PipelineState.PIPELINE_STATE_CANCELLED,
-        gca_pipeline_state.PipelineState.PIPELINE_STATE_PAUSED,
-    ]
-)
+_PIPELINE_COMPLETE_STATES = pipeline_constants._PIPELINE_COMPLETE_STATES
 
 
 class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
@@ -63,9 +57,11 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
     @property
     @classmethod
     @abc.abstractmethod
-    def _template_ref(self) -> Dict[str, str]:
-        """A dictionary of the pipeline template URLs for this servicewhere the key is
-        an identifier for that template and the value is the url of that pipeline template.
+    def _template_ref(cls) -> FrozenSet[Tuple[str, str]]:
+        """A dictionary of the pipeline template URLs for this service.
+
+        The key is an identifier for that template and the value is the url of
+        that pipeline template.
 
         For example: {"tabular_classification": "gs://path/to/tabular/pipeline/template.json"}
 
@@ -75,16 +71,52 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
     @property
     @classmethod
     @abc.abstractmethod
-    def _creation_log_message(self) -> str:
-        """A log message to use when the Pipeline-based Service is created, since this class
-        supresses logs from PipelineJob creation to avoid duplication.
+    def _creation_log_message(cls) -> str:
+        """A log message to use when the Pipeline-based Service is created.
+
+        _VertexAiPipelineBasedService supresses logs from PipelineJob creation
+        to avoid duplication.
 
         For example: 'Created PipelineJob for your Model Evaluation.'
 
         """
         pass
 
-    # TODO: Consider updating this to return a dict or list in the future to support multiple outputs
+    @property
+    @classmethod
+    @abc.abstractmethod
+    def _component_identifier(cls) -> str:
+        """A 'component_type' value unique to this service's pipeline execution metadata.
+
+        This is an identifier used by the _validate_pipeline_template_matches_service method
+        to confirm the pipeline being instantiated belongs to this service. Use something
+        specific to your service's PipelineJob.
+
+        For example: 'fpc-model-evaluation'
+
+        """
+        pass
+
+    @property
+    def _template_name_identifier(cls) -> Optional[str]:
+        """An optional name identifier for the pipeline template.
+
+        This will validate on the Pipeline's PipelineSpec.PipelineInfo.name
+        field. Setting this property will lead to an additional validation
+        check on pipeline templates in _does_pipeline_template_match_service.
+        If this property is present, the validation method will check for it
+        after validating on `_component_identifier`.
+
+        """
+        pass
+
+    @classmethod
+    @abc.abstractmethod
+    def submit(self) -> "_VertexAiPipelineBasedService":
+        """Subclasses should implement this method to submit the underlying PipelineJob."""
+        pass
+
+    # TODO (b/248582133): Consider updating this to return a list in the future to support multiple outputs
     @property
     @abc.abstractmethod
     def _metadata_output_artifact(self) -> Optional[str]:
@@ -109,12 +141,51 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
             return self.backing_pipeline_job.state
         return None
 
-    # TODO: expose _template_ref in error message when artifact registry support is added
+    @classmethod
+    def _does_pipeline_template_match_service(
+        cls, pipeline_job: "pipeline_jobs.PipelineJob"
+    ) -> bool:
+        """Checks whether the provided pipeline template matches the service.
+
+        Args:
+            pipeline_job (aiplatform.PipelineJob):
+                Required. The PipelineJob to validate with this Pipeline Based Service.
+
+        Returns:
+            Boolean indicating whether the provided template matches the
+            service it's trying to instantiate.
+        """
+
+        # We get the Execution here because we want to allow instantiating
+        # failed pipeline runs that match the service. The component_type is
+        # present in the Execution metadata for both failed and successful
+        # pipeline runs
+        for component in pipeline_job.task_details:
+            if "name" in component.execution:
+                execution_resource = aiplatform.Execution.get(component.execution.name)
+
+                # First validate on component_type
+                if (
+                    "component_type" in execution_resource.metadata
+                    and execution_resource.metadata["component_type"]
+                    == cls._component_identifier
+                ):
+                    # Then validate on _template_name_identifier if provided
+                    if cls._template_name_identifier is None or (
+                        pipeline_job.pipeline_spec is not None
+                        and cls._template_name_identifier
+                        == pipeline_job.pipeline_spec.get("pipelineInfo")["name"]
+                    ):
+                        return True
+        return False
+
+    # TODO (b/249153354): expose _template_ref in error message when artifact
+    # registry support is added
+    @classmethod
     def _validate_pipeline_template_matches_service(
-        self, pipeline_job: "pipeline_jobs.PipelineJob"
+        cls, pipeline_job: "pipeline_jobs.PipelineJob"
     ):
-        """Utility function to validate that the passed in pipeline matches
-        the template of the Pipeline Based Service.
+        """Validates the provided pipeline matches the template of the Pipeline Based Service.
 
         Args:
             pipeline_job (aiplatform.PipelineJob):
@@ -124,20 +195,9 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
             ValueError: if the provided pipeline ID doesn't match the pipeline service.
         """
 
-        pipeline_match = False
-
-        for pipeline_template in self._template_ref.values():
-            service_pipeline_json = yaml_utils.load_yaml(pipeline_template)[
-                "components"
-            ]
-            current_pipeline_json = pipeline_job.to_dict()["pipelineSpec"]["components"]
-
-            if service_pipeline_json == current_pipeline_json:
-                pipeline_match = True
-
-        if not pipeline_match:
+        if not cls._does_pipeline_template_match_service(pipeline_job):
             raise ValueError(
-                f"The provided pipeline template is not compatible with {self.__class__.__name__}"
+                f"The provided pipeline template is not compatible with {cls.__name__}"
             )
 
     def __init__(
@@ -148,13 +208,7 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
         credentials: Optional[auth_credentials.Credentials] = None,
     ):
         """Retrieves an existing Pipeline Based Service given the ID of the pipeline execution.
-        Example Usage:
-            pipeline_service = aiplatform._pipeline_based_service._VertexAiPipelineBasedService(
-                pipeline_job_name = "projects/123/locations/us-central1/pipelinesJobs/456"
-            )
-            pipeline_service = aiplatform.VertexAiPipelinebasedService(
-                pipeline_job_name = "456"
-            )
+
         Args:
             pipeline_job_name (str):
                 Required. A fully-qualified pipeline job run.
@@ -170,7 +224,8 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
                 Optional. Custom credentials to use to retrieve this pipeline job. Overrides
                 credentials set in aiplatform.init.
         Raises:
-            ValueError: if the pipeline template used in this PipelineJob is not consistent with the _template_ref defined on the subclass.
+            ValueError: if the pipeline template used in this PipelineJob is not
+            consistent with the _template_ref defined on the subclass.
         """
 
         super().__init__(
@@ -180,11 +235,13 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
             resource_name=pipeline_job_name,
         )
 
-        job_resource = pipeline_jobs.PipelineJob.get(resource_name=pipeline_job_name)
+        job_resource = pipeline_jobs.PipelineJob.get(
+            resource_name=pipeline_job_name, credentials=credentials
+        )
 
         self._validate_pipeline_template_matches_service(job_resource)
 
-        self._gca_resource = gca_pipeline_job.PipelineJob(name=pipeline_job_name)
+        self._gca_resource = job_resource._gca_resource
 
     @classmethod
     def _create_and_submit_pipeline_job(
@@ -203,15 +260,18 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
         experiment: Optional[Union[str, "aiplatform.Experiment"]] = None,
     ) -> "_VertexAiPipelineBasedService":
         """Create a new PipelineJob using the provided template and parameters.
+
         Args:
             template_params (Dict[str, Any]):
                 Required. The parameters to pass to the given pipeline template.
-            template_path (Dict[str, Any]):
-                Required. The path of the pipeline template to use for this pipeline run.
-            pipeline_root (str)
+            template_path (str):
+                Required. The path of the pipeline template to use for this
+                pipeline run.
+            pipeline_root (str):
                 Required. The GCS directory to store the pipeline run output.
-            display_name (str)
-                Optional. The user-defined name of the PipelineJob created by this Pipeline Based Service.
+            display_name (str):
+                Optional. The user-defined name of the PipelineJob created by
+                this Pipeline Based Service.
             job_id (str):
                 Optional. The unique ID of the job run.
                 If not specified, pipeline name + timestamp will be used.
@@ -223,6 +283,8 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
                 should be peered. For example, projects/12345/global/networks/myVPC.
                 Private services access must already be configured for the network.
                 If left unspecified, the job is not peered with any network.
+            encryption_spec_key_name (str):
+                Customer managed encryption key resource name.
             project (str):
                 Optional. The project to run this PipelineJob in. If not set,
                 the project set in aiplatform.init will be used.
@@ -233,8 +295,8 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
                 Optional. Custom credentials to use to create the PipelineJob.
                 Overrides credentials set in aiplatform.init.
             experiment (Union[str, experiments_resource.Experiment]):
-                Optional. The Vertex AI experiment name or instance to associate to the PipelineJob executing
-                this model evaluation job.
+                Optional. The Vertex AI experiment name or instance to associate
+                to the PipelineJob executing this model evaluation job.
         Returns:
             (VertexAiPipelineBasedService):
                 Instantiated representation of a Vertex AI Pipeline based service.
@@ -262,7 +324,8 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
         )
 
         # Suppresses logs from PipelineJob
-        # The class implementing _VertexAiPipelineBasedService should define a custom log message
+        # The class implementing _VertexAiPipelineBasedService should define a
+        # custom log message via `_creation_log_message`
         logging.getLogger("google.cloud.aiplatform.pipeline_jobs").setLevel(
             logging.WARNING
         )
@@ -284,12 +347,17 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
     @classmethod
     def list(
         cls,
+        filter: Optional[str] = None,
         project: Optional[str] = None,
         location: Optional[str] = None,
         credentials: Optional[str] = None,
-    ) -> List["pipeline_jobs.PipelineJob"]:
+    ) -> List["_VertexAiPipelineBasedService"]:
         """Lists all PipelineJob resources associated with this Pipeline Based service.
+
         Args:
+            filter (str):
+                Optional. An expression for filtering the results of the request.
+                For field names both snake_case and camelCase are supported.
             project (str):
                 Optional. The project to retrieve the Pipeline Based Services from. If not set,
                 the project set in aiplatform.init will be used.
@@ -303,26 +371,32 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
             (List[PipelineJob]):
                 A list of PipelineJob resource objects.
         """
-        self = cls._empty_constructor(
-            project=project,
-            location=location,
-            credentials=credentials,
-        )
 
-        all_pipeline_jobs = pipeline_jobs.PipelineJob.list(
-            project=project,
-            location=location,
-            credentials=credentials,
+        filter_str = f"metadata.component_type.string_value={cls._component_identifier}"
+
+        filtered_pipeline_executions = aiplatform.Execution.list(
+            filter=filter_str, credentials=credentials
         )
 
         service_pipeline_jobs = []
 
-        for job in all_pipeline_jobs:
-            try:
-                self._validate_pipeline_template_matches_service(job)
-                service_pipeline_jobs.append(job)
-
-            except ValueError:
-                continue
+        for pipeline_execution in filtered_pipeline_executions:
+            if "pipeline_job_resource_name" in pipeline_execution.metadata:
+                service_pipeline_job = cls(
+                    pipeline_execution.metadata["pipeline_job_resource_name"],
+                    project=project,
+                    location=location,
+                    credentials=credentials,
+                )
+                service_pipeline_jobs.append(service_pipeline_job)
 
         return service_pipeline_jobs
+
+    def wait(self):
+        """Wait for the PipelineJob to complete."""
+        pipeline_run = self.backing_pipeline_job
+
+        if pipeline_run._latest_future is None:
+            pipeline_run._block_until_complete()
+        else:
+            pipeline_run.wait()
