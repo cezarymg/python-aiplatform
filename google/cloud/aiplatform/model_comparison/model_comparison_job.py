@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 
-from typing import Any, Optional, List, Union, Dict
+from typing import Any, Optional, Union, Dict
 
 from google.auth import credentials as auth_credentials
 
@@ -60,26 +60,24 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
 
     _creation_log_message = "Created PipelineJob for your Model Comparison."
 
-    @classmethod
-    @property
-    def _component_identifier(cls) -> str:
-        return "fpc-structured-data"
+    _component_identifier = "fpc-structured-data"
 
-    @classmethod
-    @property
-    def _template_name_identifier(cls) -> Optional[str]:
-        return "model-comparison"
+    _template_name_identifier = "model-comparison"
 
     @property
     def _metadata_output_artifact(self) -> Optional[str]:
-        """The resource uri for the ML Metadata output artifact from the comparison component of the Model Comparison pipeline"""
+        """The resource uri for the ML Metadata output artifact from the get-experiment of the Model Comparison pipeline"""
         if self.state == gca_pipeline_state_v1.PipelineState.PIPELINE_STATE_SUCCEEDED:
             for task in self.backing_pipeline_job._gca_resource.job_detail.task_details:
                 if (
-                    task.task_name.startswith("model-comparison")
-                    and "comparison_metrics" in task.outputs
+                    task.task_name.startswith("get-experiment")
+                    and "experiment" in task.outputs
                 ):
-                    return task.outputs["comparison_metrics"].artifacts[0].name
+                    return (
+                        task.outputs["experiment"]
+                        .artifacts[0]
+                        .metadata["experiment_name"]
+                    )
 
     def __init__(
         self,
@@ -260,3 +258,26 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
         else:
             pipeline_run.wait()
 
+    def get_model_comparison_results(
+        self,
+    ) -> Optional["pd.DataFrame"]:  # noqa: F821
+        """Gets the DataFrame with the results of the model comparison.
+        Returns:
+            pd.DataFrame: A dataframe with the results of the model comparison job.
+        Raises:
+            RuntimeError: If the ModelComparisonJobb pipeline failed.
+        """
+        eval_job_state = self.backing_pipeline_job.state
+
+        if eval_job_state in pipeline_jobs._PIPELINE_ERROR_STATES:
+            raise RuntimeError(
+                f"Comparison job failed. For more details see the logs: {self.pipeline_console_uri}"
+            )
+        elif eval_job_state not in pipeline_jobs._PIPELINE_COMPLETE_STATES:
+            _LOGGER.info(
+                f"Your comparison job is still in progress. For more details see the logs {self.pipeline_console_uri}"
+            )
+        else:
+            return aiplatform.Experiment(
+                experiment_name=self._metadata_output_artifact
+            ).get_data_frame()
