@@ -15,6 +15,8 @@
 # limitations under the License.
 #
 
-from google.cloud.aiplatform.model_comparison.model_comparison_job import ModelComparisonJob
+from google.cloud.aiplatform.model_comparison.model_comparison_job import (
+    ModelComparisonJob,
+)
 
 __all__ = ("ModelComparisonJob",)

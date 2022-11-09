@@ -31,23 +31,28 @@ from google.cloud.aiplatform.compat.types import (
 
 _LOGGER = base.Logger(__name__)
 
-MODEL_COMPARISON_PIPELINE = 'model_comparison'
-BQML_ARIMA_TRAIN_PIPELINE = 'bqml_arima_train'
-AUTOML_TABULAR_PIPELINE = 'automl_tabular'
+MODEL_COMPARISON_PIPELINE = "model_comparison"
+BQML_ARIMA_TRAIN_PIPELINE = "bqml_arima_train"
+AUTOML_TABULAR_PIPELINE = "automl_tabular"
 
 _PIPELINE_TEMPLATES = {
     MODEL_COMPARISON_PIPELINE: (
-    'https://raw.githubusercontent.com/TheMichaelHu/pipelines/mh-update-compare/components'
-    '/google-cloud/google_cloud_pipeline_components/experimental/automl/tabular'
-    '/model_comparison_pipeline.json'),
-    BQML_ARIMA_TRAIN_PIPELINE: ('https://raw.githubusercontent.com/kubeflow/pipelines/master'
-    '/components/google-cloud/google_cloud_pipeline_components/experimental/automl/forecasting'
-    '/bqml_arima_train_pipeline.json'),
+        "https://raw.githubusercontent.com/TheMichaelHu/pipelines/mh-update-compare/components"
+        "/google-cloud/google_cloud_pipeline_components/experimental/automl/tabular"
+        "/model_comparison_pipeline.json"
+    ),
+    BQML_ARIMA_TRAIN_PIPELINE: (
+        "https://raw.githubusercontent.com/kubeflow/pipelines/master"
+        "/components/google-cloud/google_cloud_pipeline_components/experimental/automl/forecasting"
+        "/bqml_arima_train_pipeline.json"
+    ),
     AUTOML_TABULAR_PIPELINE: (
-    'https://raw.githubusercontent.com/kubeflow/pipelines/06761b945055595de159238bfb00b09822f80520'
-    '/components/google-cloud/google_cloud_pipeline_components/experimental/automl/tabular'
-    '/automl_tabular_pipeline.json'),
+        "https://raw.githubusercontent.com/kubeflow/pipelines/06761b945055595de159238bfb00b09822f80520"
+        "/components/google-cloud/google_cloud_pipeline_components/experimental/automl/tabular"
+        "/automl_tabular_pipeline.json"
+    ),
 }
+
 
 class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
 
@@ -55,13 +60,13 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
 
     _creation_log_message = "Created PipelineJob for your Model Comparison."
 
-    @property
     @classmethod
+    @property
     def _component_identifier(cls) -> str:
         return "fpc-structured-data"
 
-    @property
     @classmethod
+    @property
     def _template_name_identifier(cls) -> Optional[str]:
         return "model-comparison"
 
@@ -221,7 +226,7 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
             "training_jobs": training_jobs,
             "data_source_csv_filenames": data_source_csv_filenames,
             "data_source_bigquery_table_path": data_source_bigquery_table_path,
-            "experiment": experiment or '',
+            "experiment": experiment or "",
         }
 
         template_url = cls.get_template_url(MODEL_COMPARISON_PIPELINE)
