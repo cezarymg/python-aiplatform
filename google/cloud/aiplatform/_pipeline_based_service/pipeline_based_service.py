@@ -171,19 +171,21 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
             ):
                 continue
 
-            execution_resource = aiplatform.Execution.get(component.execution.name)
+            execution_resource = aiplatform.Execution.get(
+                component.execution.name, credentials=pipeline_job.credentials
+            )
 
             # First validate on component_type
             if (
                 "component_type" in execution_resource.metadata
-                and execution_resource.metadata["component_type"]
+                and execution_resource.metadata.get("component_type")
                 == cls._component_identifier
             ):
                 # Then validate on _template_name_identifier if provided
                 if cls._template_name_identifier is None or (
                     pipeline_job.pipeline_spec is not None
                     and cls._template_name_identifier
-                    == pipeline_job.pipeline_spec.get("pipelineInfo")["name"]
+                    == pipeline_job.pipeline_spec["pipelineInfo"]["name"]
                 ):
                     return True
         return False
@@ -257,7 +259,7 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
         cls,
         template_params: Dict[str, Any],
         template_path: str,
-        pipeline_root: str,
+        pipeline_root: Optional[str] = None,
         display_name: Optional[str] = None,
         job_id: Optional[str] = None,
         service_account: Optional[str] = None,
@@ -277,7 +279,9 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
                 Required. The path of the pipeline template to use for this
                 pipeline run.
             pipeline_root (str):
-                Required. The GCS directory to store the pipeline run output.
+                Optional. The GCS directory to store the pipeline run output.
+                If not set, the bucket set in `aiplatform.init(staging_bucket=...)`
+                will be used.
             display_name (str):
                 Optional. The user-defined name of the PipelineJob created by
                 this Pipeline Based Service.
@@ -356,7 +360,6 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
     @classmethod
     def list(
         cls,
-        filter: Optional[str] = None,
         project: Optional[str] = None,
         location: Optional[str] = None,
         credentials: Optional[str] = None,
@@ -364,18 +367,15 @@ class _VertexAiPipelineBasedService(base.VertexAiStatefulResource):
         """Lists all PipelineJob resources associated with this Pipeline Based service.
 
         Args:
-            filter (str):
-                Optional. An expression for filtering the results of the request.
-                For field names both snake_case and camelCase are supported.
             project (str):
-                Optional. The project to retrieve the Pipeline Based Services from. If not set,
-                the project set in aiplatform.init will be used.
+                Optional. The project to retrieve the Pipeline Based Services from.
+                If not set, the project set in aiplatform.init will be used.
             location (str):
-                Optional. Location to retrieve the Pipeline Based Services from. If not set,
-                location set in aiplatform.init will be used.
+                Optional. Location to retrieve the Pipeline Based Services from.
+                If not set, location set in aiplatform.init will be used.
             credentials (auth_credentials.Credentials):
-                Optional. Custom credentials to use to retrieve the Pipeline Based Services from.
-                Overrides credentials set in aiplatform.init.
+                Optional. Custom credentials to use to retrieve the Pipeline Based
+                Services from. Overrides credentials set in aiplatform.init.
         Returns:
             (List[PipelineJob]):
                 A list of PipelineJob resource objects.
