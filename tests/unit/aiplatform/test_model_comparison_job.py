@@ -43,10 +43,6 @@ from google.cloud.aiplatform_v1.types import (
     pipeline_state as gca_pipeline_state_v1,
 )
 
-from google.cloud.aiplatform._pipeline_based_service import (
-    pipeline_based_service,
-)
-
 from google.cloud.aiplatform_v1 import Execution as GapicExecution
 from google.cloud.aiplatform_v1 import MetadataServiceClient
 
@@ -105,6 +101,7 @@ _TEST_PARAMS = {
     _TEST_PIPELINE_PARAM_KEY: _TEST_PIPELINE_JOB_NAME,
 }
 _TEST_OTHER_PARAMS = {_TEST_PARAM_KEY_1: 0.02, _TEST_PARAM_KEY_2: 0.3}
+_TEST_PIPELINE_TEMPLATE = model_comparison_job._PIPELINE_TEMPLATES[model_comparison_job.MODEL_COMPARISON_PIPELINE]
 
 
 _TEST_PIPELINE_PARAMETER_VALUES = {
@@ -196,6 +193,16 @@ def mock_model_comparison_job_get():
             ),
         ]
 
+        yield mock_get_pipeline_job
+
+@pytest.fixture
+def mock_model_comparison_job_get_failed():
+    with mock.patch.object(
+        pipeline_service_client_v1.PipelineServiceClient, "get_pipeline_job"
+    ) as mock_get_pipeline_job:
+        mock_get_pipeline_job.return_value = make_pipeline_job(
+            gca_pipeline_state_v1.PipelineState.PIPELINE_STATE_FAILED
+        )
         yield mock_get_pipeline_job
 
 
@@ -312,7 +319,6 @@ class TestModelComparisonJob:
         mock_load_yaml_and_json,
         mock_model_comparison_job_get,
         mock_model_comparison_job_create,
-        mock_pipeline_bucket_exists,
     ):
         aiplatform.init(
             project=_TEST_PROJECT,
@@ -346,6 +352,7 @@ class TestModelComparisonJob:
                 "data_source_bigquery_table_path": {"stringValue": _TEST_BQ_DATASET},
                 "data_source_csv_filenames": {"stringValue": ""},
                 "experiment": {"stringValue": _TEST_EXPERIMENT},
+                "training_jobs": {"stringValue": "{}"},
             },
         }
 
@@ -366,6 +373,7 @@ class TestModelComparisonJob:
                 "sdkVersion": "kfp-1.8.12",
             },
             runtime_config=runtime_config,
+            template_uri=_TEST_PIPELINE_TEMPLATE
         )
 
         mock_model_comparison_job_create.assert_called_with(
@@ -376,3 +384,50 @@ class TestModelComparisonJob:
         )
 
         assert mock_model_comparison_job_get.called_once
+
+    @pytest.mark.parametrize(
+        "job_spec",
+        [_TEST_PIPELINE_SPEC_JSON],
+    )
+    def test_get_model_evaluation_with_successful_pipeline_run_returns_resource(
+        self,
+        job_spec,
+        mock_load_yaml_and_json,
+        mock_model_comparison_job_get,
+        mock_model_comparison_job_create,
+    ):
+        aiplatform.init(
+            project=_TEST_PROJECT,
+            location=_TEST_LOCATION,
+            credentials=_TEST_CREDENTIALS,
+            staging_bucket=_TEST_GCS_BUCKET_NAME,
+        )
+
+        test_model_comparison_job = model_comparison_job.ModelComparisonJob.submit(
+            data_source_bigquery_table_path=_TEST_BQ_DATASET,
+            data_source_csv_filenames="",
+            experiment=_TEST_EXPERIMENT,
+            location=_TEST_LOCATION,
+            pipeline_root=_TEST_GCS_BUCKET_NAME,
+            problem_type="forecasting",
+            project=_TEST_PROJECT,
+            training_jobs={},
+            job_id=_TEST_PIPELINE_JOB_ID,
+            comparison_pipeline_display_name=_TEST_PIPELINE_JOB_DISPLAY_NAME
+        )
+
+        test_model_comparison_job.wait()
+
+        # assert (
+        #     test_model_comparison_job._metadata_output_artifact
+        #     == _TEST_ARTIFACT_NAME
+        # )
+
+        assert (
+            test_model_comparison_job.backing_pipeline_job.resource_name
+            == _TEST_PIPELINE_JOB_NAME
+        )
+
+        assert isinstance(
+            test_model_comparison_job.backing_pipeline_job, aiplatform.PipelineJob
+        )

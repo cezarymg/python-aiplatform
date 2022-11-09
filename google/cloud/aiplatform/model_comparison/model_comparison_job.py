@@ -259,3 +259,4 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
             pipeline_run._block_until_complete()
         else:
             pipeline_run.wait()
+
