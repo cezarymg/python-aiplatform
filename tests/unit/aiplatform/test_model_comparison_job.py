@@ -20,6 +20,7 @@ import datetime
 import yaml
 import json
 import pytest
+import test_metadata
 from unittest import mock
 
 from google.auth import credentials as auth_credentials
@@ -54,25 +55,16 @@ _TEST_PIPELINE_JOB_ID = "sample-test-pipeline-202111111"
 _TEST_GCS_BUCKET_NAME = "my-bucket"
 _TEST_BQ_DATASET = "bq://test-data.train"
 _TEST_CREDENTIALS = auth_credentials.AnonymousCredentials()
-_TEST_SERVICE_ACCOUNT = "abcde@my-project.iam.gserviceaccount.com"
 _TEST_COMPONENT_IDENTIFIER = "fpc-structured-data"
 _TEST_PIPELINE_NAME_IDENTIFIER = "model-comparison"
-_TEST_INVALID_PIPELINE_NAME_IDENTIFIER = "not-a-valid-pipeline-name"
 _TEST_PIPELINE_CREATE_TIME = datetime.datetime.now()
-
-
-_TEST_TEMPLATE_PATH = f"gs://{_TEST_GCS_BUCKET_NAME}/job_spec.json"
-_TEST_TEMPLATE_REF = {"test_pipeline_type": _TEST_TEMPLATE_PATH}
-_TEST_PIPELINE_ROOT = f"gs://{_TEST_GCS_BUCKET_NAME}/pipeline_root"
 _TEST_PARENT = f"projects/{_TEST_PROJECT}/locations/{_TEST_LOCATION}"
-_TEST_NETWORK = f"projects/{_TEST_PROJECT}/global/networks/{_TEST_PIPELINE_JOB_ID}"
 
 _TEST_PIPELINE_JOB_NAME = f"projects/{_TEST_PROJECT}/locations/{_TEST_LOCATION}/pipelineJobs/{_TEST_PIPELINE_JOB_ID}"
 _TEST_INVALID_PIPELINE_JOB_NAME = (
     f"prj/{_TEST_PROJECT}/locations/{_TEST_LOCATION}/{_TEST_PIPELINE_JOB_ID}"
 )
 
-# executions: this is used in test_list_pipeline_based_service
 _TEST_EXECUTION_PARENT = (
     f"projects/{_TEST_PROJECT}/locations/{_TEST_LOCATION}/metadataStores/default"
 )
@@ -82,20 +74,8 @@ _TEST_EXPERIMENT = "test-experiment"
 _TEST_EXECUTION_ID = f"{_TEST_EXPERIMENT}-{_TEST_RUN}"
 _TEST_EXECUTION_NAME = f"{_TEST_EXECUTION_PARENT}/executions/{_TEST_EXECUTION_ID}"
 
-# execution metadata parameters: used in test_list_pipeline_based_service
 _TEST_PIPELINE_TEMPLATE = ModelComparisonJob.get_template_url("model_comparison")
 
-
-_TEST_PIPELINE_PARAMETER_VALUES = {
-    "data_source_bigquery_table_path": _TEST_BQ_DATASET,
-    "data_source_csv_filenames": "",
-    "experiment": _TEST_EXPERIMENT,
-    "location": _TEST_LOCATION,
-    "root_dir": _TEST_GCS_BUCKET_NAME,
-    "problem_type": "forecasting",
-    "project": _TEST_PROJECT,
-    "training_jobs": {},
-}
 
 _TEST_PIPELINE_SPEC_JSON = json.dumps(
     {
@@ -121,11 +101,22 @@ _TEST_PIPELINE_SPEC_JSON = json.dumps(
     }
 )
 
-_TEST_PIPELINE_JOB = json.dumps(
-    {
-        "runtimeConfig": {"parameterValues": _TEST_PIPELINE_PARAMETER_VALUES},
-        "pipelineSpec": json.loads(_TEST_PIPELINE_SPEC_JSON),
-    }
+
+list_context_mock_for_experiment_dataframe_mock = (
+    test_metadata.list_context_mock_for_experiment_dataframe_mock
+)
+list_artifact_mock_for_experiment_dataframe = (
+    test_metadata.list_artifact_mock_for_experiment_dataframe
+)
+list_executions_mock_for_experiment_dataframe = (
+    test_metadata.list_executions_mock_for_experiment_dataframe
+)
+get_tensorboard_run_artifact_mock = test_metadata.get_tensorboard_run_artifact_mock
+get_tensorboard_run_mock = test_metadata.get_tensorboard_run_mock
+get_experiment_mock = test_metadata.get_experiment_mock
+list_tensorboard_time_series_mock = test_metadata.list_tensorboard_time_series_mock
+batch_read_tensorboard_time_series_mock = (
+    test_metadata.batch_read_tensorboard_time_series_mock
 )
 
 
@@ -348,6 +339,14 @@ class TestModelComparisonJob:
     def test_get_model_comparison_results_with_successful_pipeline_run(
         self,
         job_spec,
+        list_context_mock_for_experiment_dataframe_mock,
+        list_artifact_mock_for_experiment_dataframe,
+        list_executions_mock_for_experiment_dataframe,
+        get_tensorboard_run_artifact_mock,
+        get_tensorboard_run_mock,
+        list_tensorboard_time_series_mock,
+        get_experiment_mock,
+        batch_read_tensorboard_time_series_mock,
         mock_model_comparison_job_get,
         mock_model_comparison_job_create,
     ):
@@ -383,6 +382,10 @@ class TestModelComparisonJob:
         assert isinstance(
             test_model_comparison_job.backing_pipeline_job, aiplatform.PipelineJob
         )
+
+        comparison_result = test_model_comparison_job.get_model_comparison_results()
+
+        assert type(comparison_result).__name__ == "DataFrame"
 
     @pytest.mark.parametrize(
         "job_spec",

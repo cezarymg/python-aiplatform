@@ -249,15 +249,6 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
 
         return comparison_pipeline_run
 
-    def wait(self):
-        """Wait for thie PipelineJob to complete."""
-        pipeline_run = super().backing_pipeline_job
-
-        if pipeline_run._latest_future is None:
-            pipeline_run._block_until_complete()
-        else:
-            pipeline_run.wait()
-
     def get_model_comparison_results(
         self,
     ) -> Optional["pd.DataFrame"]:  # noqa: F821
