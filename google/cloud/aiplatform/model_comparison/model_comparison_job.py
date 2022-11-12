@@ -134,50 +134,41 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
         cls,
         problem_type: str,
         training_jobs: Dict[str, Dict[str, Any]],
-        data_source_csv_filenames: str,
-        data_source_bigquery_table_path: str,
         pipeline_root: str,
+        data_source_csv_filenames: str = "",
+        data_source_bigquery_table_path: str = "",
         job_id: Optional[str] = None,
         comparison_pipeline_display_name: Optional[str] = None,
         service_account: Optional[str] = None,
         network: Optional[str] = None,
-        encryption_spec_key_name: Optional[str] = None,
         project: Optional[str] = None,
         location: Optional[str] = None,
-        credentials: Optional[auth_credentials.Credentials] = None,
-        experiment: Optional[Union[str, "aiplatform.Experiment"]] = None,
+        experiment: Optional[str] = "",
     ) -> "ModelComparisonJob":
         """Submits a Model Comparison Job using aiplatform.PipelineJob and returns
         the ModelComparisonJob resource.
 
         Example usage:
         my_comparison = _ModelComparisonJob.submit(
-            prediction_type="classification",
-            pipeline_root="gs://my-pipeline-bucket/runpath",
-            gcs_source_uris=["gs://test-prediction-data"],
-            target_column_name=["prediction_class"],
-            instances_format="jsonl",
+            problem_type='tabular',
+            training_jobs={},
+            data_source_bigquery_table_path=bq:,
+            data_source_csv_filenames='',
+            pipeline_root=os.path.join(BUCKET_URI, DISPLAY_NAME),
         )
 
-        my_comparison = _ModelComparisonJob.submit(
-            prediction_type="regression",
-            pipeline_root="gs://my-pipeline-bucket/runpath",
-            gcs_source_uris=["gs://test-prediction-data"],
-            target_column_name=["price"],
-            instances_format="jsonl",
-        )
         Args:
-            problem_type: The type of problem being solved. Can be one of: regression,
+            problem_type: Required. The type of problem being solved. Can be one of: regression,
                 binary_classification, multiclass_classification, or forecasting
-            training_jobs: A dict mapping name to a dict of training job inputs.
+            training_jobs: Required. A dict mapping name to a dict of training job inputs.
+            pipeline_root (str):
+                Required. The GCS directory to store output from the model comparison PipelineJob.
             data_source_csv_filenames: Paths to CSVs stored in GCS to use as the dataset
                 for all training pipelines. This should be None if
                 `data_source_bigquery_table_path` is not None.
             data_source_bigquery_table_path: Path to BigQuery Table to use as the
                 dataset for all training pipelines. This should be None if
                 `data_source_csv_filenames` is not None.
-            pipeline_root (str):
-                Required. The GCS directory to store output from the model comparison PipelineJob.
             job_id (str):
                 Optional. The unique ID of the job run.
                 If not specified, pipeline name + timestamp will be used.
@@ -186,33 +177,27 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
             service_account (str):
                 Specifies the service account for workload run-as account for this Model Comparison PipelineJob.
                 Users submitting jobs must have act-as permission on this run-as account. The service account running
-                this Model Comparison job needs the following permissions: Dataflow Worker, Storage Admin, Vertex AI User.
+                this Model Comparison job needs the following permissions: Storage Admin, Vertex AI User.
             network (str):
                 The full name of the Compute Engine network to which the job
                 should be peered. For example, projects/12345/global/networks/myVPC.
                 Private services access must already be configured for the network.
                 If left unspecified, the job is not peered with any network.
-            encryption_spec_key_name (str):
-                Optional. The Cloud KMS resource identifier of the customer managed encryption key used to protect the job. Has the
-                form: ``projects/my-project/locations/my-region/keyRings/my-kr/cryptoKeys/my-key``. The key needs to be in the same
-                region as where the compute resource is created. If this is set, then all
-                resources created by the PipelineJob for this Model Comparison will be encrypted with the provided encryption key.
-                If not specified, encryption_spec of original PipelineJob will be used.
             project (str):
                 Optional. The project to run this PipelineJob in. If not set,
                 the project set in aiplatform.init will be used.
             location (str):
                 Optional. Location to create PipelineJob. If not set,
                 location set in aiplatform.init will be used.
-            credentials (auth_credentials.Credentials):
-                Optional. Custom credentials to use to create the PipelineJob.
-                Overrides credentials set in aiplatform.init.
-            experiment (Union[str, experiments_resource.Experiment]):
-                Optional. The Vertex AI experiment name or instance to associate to the PipelineJob executing
-                this model comparison job.
+            experiment (str):
+                Optional. The Vertex AI experiment name to be used for this model comparison job. If not provided will be auto-generated.
         Returns:
             (ModelComparisonJob): Instantiated represnetation of the model comparison job.
         """
+
+        if bool(data_source_csv_filenames) == bool(data_source_bigquery_table_path):
+            raise ValueError(f"Exactly one data source parameter should be set. {data_source_csv_filenames=}, {data_source_bigquery_table_path=}")
+
         if not comparison_pipeline_display_name:
             comparison_pipeline_display_name = cls._generate_display_name()
 
@@ -224,7 +209,7 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
             "training_jobs": training_jobs,
             "data_source_csv_filenames": data_source_csv_filenames,
             "data_source_bigquery_table_path": data_source_bigquery_table_path,
-            "experiment": experiment or "",
+            "experiment": experiment,
         }
 
         template_url = cls.get_template_url(MODEL_COMPARISON_PIPELINE)
@@ -237,10 +222,8 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
             job_id=job_id,
             service_account=service_account,
             network=network,
-            encryption_spec_key_name=encryption_spec_key_name,
             project=project,
             location=location,
-            credentials=credentials,
         )
 
         _LOGGER.info(

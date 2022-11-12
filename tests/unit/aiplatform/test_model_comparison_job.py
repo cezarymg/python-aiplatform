@@ -54,6 +54,7 @@ _TEST_PIPELINE_JOB_DISPLAY_NAME = "sample-pipeline-job-display-name"
 _TEST_PIPELINE_JOB_ID = "sample-test-pipeline-202111111"
 _TEST_GCS_BUCKET_NAME = "my-bucket"
 _TEST_BQ_DATASET = "bq://test-data.train"
+_TEST_CSV_DATASET = "gs://cloud-samples-data/vertex-ai/tabular-workflows/datasets/safe-driver/train.csv"
 _TEST_CREDENTIALS = auth_credentials.AnonymousCredentials()
 _TEST_COMPONENT_IDENTIFIER = "fpc-structured-data"
 _TEST_PIPELINE_NAME_IDENTIFIER = "model-comparison"
@@ -331,6 +332,38 @@ class TestModelComparisonJob:
         )
 
         assert mock_model_comparison_job_get.called_once
+
+    def test_model_comparison_job_submit_with_unspecified_data_source_raises(
+        self,
+    ):
+        with pytest.raises(ValueError):
+            ModelComparisonJob.submit(
+                experiment=_TEST_EXPERIMENT,
+                location=_TEST_LOCATION,
+                pipeline_root=_TEST_GCS_BUCKET_NAME,
+                problem_type="forecasting",
+                project=_TEST_PROJECT,
+                training_jobs={},
+                job_id=_TEST_PIPELINE_JOB_ID,
+                comparison_pipeline_display_name=_TEST_PIPELINE_JOB_DISPLAY_NAME,
+            )
+
+    def test_model_comparison_job_submit_with_overspecified_data_source_raises(
+        self,
+    ):
+        with pytest.raises(ValueError):
+            ModelComparisonJob.submit(
+                data_source_bigquery_table_path=_TEST_BQ_DATASET,
+                data_source_csv_filenames=_TEST_CSV_DATASET,
+                experiment=_TEST_EXPERIMENT,
+                location=_TEST_LOCATION,
+                pipeline_root=_TEST_GCS_BUCKET_NAME,
+                problem_type="forecasting",
+                project=_TEST_PROJECT,
+                training_jobs={},
+                job_id=_TEST_PIPELINE_JOB_ID,
+                comparison_pipeline_display_name=_TEST_PIPELINE_JOB_DISPLAY_NAME,
+            )
 
     @pytest.mark.parametrize(
         "job_spec",
