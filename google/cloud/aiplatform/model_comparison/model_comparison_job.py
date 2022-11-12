@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 
-from typing import Any, Optional, Union, Dict
+from typing import Any, Optional, Dict
 
 from google.auth import credentials as auth_credentials
 
@@ -196,7 +196,9 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
         """
 
         if bool(data_source_csv_filenames) == bool(data_source_bigquery_table_path):
-            raise ValueError(f"Exactly one data source parameter should be set. {data_source_csv_filenames=}, {data_source_bigquery_table_path=}")
+            raise ValueError(
+                f"Exactly one data source parameter should be set. data_source_csv_filenames={data_source_csv_filenames}, data_source_bigquery_table_path={data_source_bigquery_table_path}"
+            )
 
         if not comparison_pipeline_display_name:
             comparison_pipeline_display_name = cls._generate_display_name()

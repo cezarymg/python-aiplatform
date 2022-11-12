@@ -54,7 +54,9 @@ _TEST_PIPELINE_JOB_DISPLAY_NAME = "sample-pipeline-job-display-name"
 _TEST_PIPELINE_JOB_ID = "sample-test-pipeline-202111111"
 _TEST_GCS_BUCKET_NAME = "my-bucket"
 _TEST_BQ_DATASET = "bq://test-data.train"
-_TEST_CSV_DATASET = "gs://cloud-samples-data/vertex-ai/tabular-workflows/datasets/safe-driver/train.csv"
+_TEST_CSV_DATASET = (
+    "gs://cloud-samples-data/vertex-ai/tabular-workflows/datasets/safe-driver/train.csv"
+)
 _TEST_CREDENTIALS = auth_credentials.AnonymousCredentials()
 _TEST_COMPONENT_IDENTIFIER = "fpc-structured-data"
 _TEST_PIPELINE_NAME_IDENTIFIER = "model-comparison"
