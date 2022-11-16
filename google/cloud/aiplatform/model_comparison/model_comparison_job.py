@@ -37,7 +37,7 @@ AUTOML_TABULAR_PIPELINE = "automl_tabular"
 
 _PIPELINE_TEMPLATES = {
     MODEL_COMPARISON_PIPELINE: (
-        "https://raw.githubusercontent.com/cezarymg/python-aiplatform/model_comparison/tests/unit/aiplatform/model_comparison_pipeline.json"
+        "https://raw.githubusercontent.com/cezarymg/python-aiplatform/model_comparison_exp/tests/unit/aiplatform/model_comparison_pipeline.json"
     ),
     BQML_ARIMA_TRAIN_PIPELINE: (
         "https://raw.githubusercontent.com/kubeflow/pipelines/master"
