@@ -62,6 +62,8 @@ _TEST_COMPONENT_IDENTIFIER = "fpc-structured-data"
 _TEST_PIPELINE_NAME_IDENTIFIER = "model-comparison"
 _TEST_PIPELINE_CREATE_TIME = datetime.datetime.now()
 _TEST_PARENT = f"projects/{_TEST_PROJECT}/locations/{_TEST_LOCATION}"
+_TEST_NETWORK = "projects/12345/global/networks/myVPC"
+_TEST_SERVICE_ACCOUNT = "sa@test-project.gserviceaccount.google.com"
 
 _TEST_PIPELINE_JOB_NAME = f"projects/{_TEST_PROJECT}/locations/{_TEST_LOCATION}/pipelineJobs/{_TEST_PIPELINE_JOB_ID}"
 _TEST_INVALID_PIPELINE_JOB_NAME = (
@@ -89,12 +91,16 @@ _TEST_PIPELINE_SPEC_JSON = json.dumps(
                 "parameters": {
                     "data_source_bigquery_table_path": {"type": "STRING"},
                     "data_source_csv_filenames": {"type": "STRING"},
+                    "evaluation_data_source_bigquery_table_path": {"type": "STRING"},
+                    "evaluation_data_source_csv_filenames": {"type": "STRING"},
                     "experiment": {"type": "STRING"},
                     "location": {"type": "STRING"},
                     "problem_type": {"type": "STRING"},
                     "project": {"type": "STRING"},
                     "root_dir": {"type": "STRING"},
                     "training_jobs": {"type": "STRING"},
+                    "network": {"type": "STRING"},
+                    "service_account": {"type": "STRING"},
                 }
             },
         },
@@ -279,7 +285,7 @@ class TestModelComparisonJob:
 
         test_model_comparison_job = ModelComparisonJob.submit(
             data_source_bigquery_table_path=_TEST_BQ_DATASET,
-            data_source_csv_filenames="",
+            evaluation_data_source_bigquery_table_path=_TEST_BQ_DATASET,
             experiment=_TEST_EXPERIMENT,
             location=_TEST_LOCATION,
             pipeline_root=_TEST_GCS_BUCKET_NAME,
@@ -288,6 +294,8 @@ class TestModelComparisonJob:
             training_jobs={},
             job_id=_TEST_PIPELINE_JOB_ID,
             comparison_pipeline_display_name=_TEST_PIPELINE_JOB_DISPLAY_NAME,
+            network=_TEST_NETWORK,
+            service_account=_TEST_SERVICE_ACCOUNT,
         )
 
         test_model_comparison_job.wait()
@@ -301,7 +309,13 @@ class TestModelComparisonJob:
                 "root_dir": {"stringValue": _TEST_GCS_BUCKET_NAME},
                 "data_source_bigquery_table_path": {"stringValue": _TEST_BQ_DATASET},
                 "data_source_csv_filenames": {"stringValue": ""},
+                "evaluation_data_source_bigquery_table_path": {
+                    "stringValue": _TEST_BQ_DATASET
+                },
+                "evaluation_data_source_csv_filenames": {"stringValue": ""},
                 "experiment": {"stringValue": _TEST_EXPERIMENT},
+                "service_account": {"stringValue": _TEST_SERVICE_ACCOUNT},
+                "network": {"stringValue": _TEST_NETWORK},
                 "training_jobs": {"stringValue": "{}"},
             },
         }
@@ -324,6 +338,8 @@ class TestModelComparisonJob:
             },
             runtime_config=runtime_config,
             template_uri=_TEST_PIPELINE_TEMPLATE,
+            service_account=_TEST_SERVICE_ACCOUNT,
+            network=_TEST_NETWORK,
         )
 
         mock_model_comparison_job_create.assert_called_with(
@@ -340,6 +356,7 @@ class TestModelComparisonJob:
     ):
         with pytest.raises(ValueError):
             ModelComparisonJob.submit(
+                evaluation_data_source_bigquery_table_path=_TEST_BQ_DATASET,
                 experiment=_TEST_EXPERIMENT,
                 location=_TEST_LOCATION,
                 pipeline_root=_TEST_GCS_BUCKET_NAME,
@@ -356,6 +373,41 @@ class TestModelComparisonJob:
         with pytest.raises(ValueError):
             ModelComparisonJob.submit(
                 data_source_bigquery_table_path=_TEST_BQ_DATASET,
+                data_source_csv_filenames=_TEST_CSV_DATASET,
+                evaluation_data_source_bigquery_table_path=_TEST_BQ_DATASET,
+                experiment=_TEST_EXPERIMENT,
+                location=_TEST_LOCATION,
+                pipeline_root=_TEST_GCS_BUCKET_NAME,
+                problem_type="forecasting",
+                project=_TEST_PROJECT,
+                training_jobs={},
+                job_id=_TEST_PIPELINE_JOB_ID,
+                comparison_pipeline_display_name=_TEST_PIPELINE_JOB_DISPLAY_NAME,
+            )
+
+    def test_model_comparison_job_submit_with_unspecified_evaluation_source_raises(
+        self,
+    ):
+        with pytest.raises(ValueError):
+            ModelComparisonJob.submit(
+                data_source_csv_filenames=_TEST_CSV_DATASET,
+                experiment=_TEST_EXPERIMENT,
+                location=_TEST_LOCATION,
+                pipeline_root=_TEST_GCS_BUCKET_NAME,
+                problem_type="forecasting",
+                project=_TEST_PROJECT,
+                training_jobs={},
+                job_id=_TEST_PIPELINE_JOB_ID,
+                comparison_pipeline_display_name=_TEST_PIPELINE_JOB_DISPLAY_NAME,
+            )
+
+    def test_model_comparison_job_submit_with_overspecified_evaluation_source_raises(
+        self,
+    ):
+        with pytest.raises(ValueError):
+            ModelComparisonJob.submit(
+                evaluation_data_source_bigquery_table_path=_TEST_BQ_DATASET,
+                evaluation_data_source_csv_filenames=_TEST_CSV_DATASET,
                 data_source_csv_filenames=_TEST_CSV_DATASET,
                 experiment=_TEST_EXPERIMENT,
                 location=_TEST_LOCATION,
@@ -395,6 +447,7 @@ class TestModelComparisonJob:
         test_model_comparison_job = ModelComparisonJob.submit(
             data_source_bigquery_table_path=_TEST_BQ_DATASET,
             data_source_csv_filenames="",
+            evaluation_data_source_bigquery_table_path=_TEST_BQ_DATASET,
             experiment=_TEST_EXPERIMENT,
             location=_TEST_LOCATION,
             pipeline_root=_TEST_GCS_BUCKET_NAME,
@@ -442,6 +495,7 @@ class TestModelComparisonJob:
         test_model_comparison_job = ModelComparisonJob.submit(
             data_source_bigquery_table_path=_TEST_BQ_DATASET,
             data_source_csv_filenames="",
+            evaluation_data_source_bigquery_table_path=_TEST_BQ_DATASET,
             experiment=_TEST_EXPERIMENT,
             location=_TEST_LOCATION,
             pipeline_root=_TEST_GCS_BUCKET_NAME,
@@ -475,6 +529,7 @@ class TestModelComparisonJob:
         test_model_comparison_job = ModelComparisonJob.submit(
             data_source_bigquery_table_path=_TEST_BQ_DATASET,
             data_source_csv_filenames="",
+            evaluation_data_source_bigquery_table_path=_TEST_BQ_DATASET,
             experiment=_TEST_EXPERIMENT,
             location=_TEST_LOCATION,
             pipeline_root=_TEST_GCS_BUCKET_NAME,

@@ -37,9 +37,7 @@ AUTOML_TABULAR_PIPELINE = "automl_tabular"
 
 _PIPELINE_TEMPLATES = {
     MODEL_COMPARISON_PIPELINE: (
-        "https://raw.githubusercontent.com/TheMichaelHu/pipelines/mh-update-compare/components"
-        "/google-cloud/google_cloud_pipeline_components/experimental/automl/tabular"
-        "/model_comparison_pipeline.json"
+        "https://raw.githubusercontent.com/cezarymg/python-aiplatform/model_comparison/tests/unit/aiplatform/model_comparison_pipeline.json"
     ),
     BQML_ARIMA_TRAIN_PIPELINE: (
         "https://raw.githubusercontent.com/kubeflow/pipelines/master"
@@ -137,10 +135,12 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
         pipeline_root: str,
         data_source_csv_filenames: str = "",
         data_source_bigquery_table_path: str = "",
+        evaluation_data_source_csv_filenames: str = "",
+        evaluation_data_source_bigquery_table_path: str = "",
         job_id: Optional[str] = None,
         comparison_pipeline_display_name: Optional[str] = None,
-        service_account: Optional[str] = None,
-        network: Optional[str] = None,
+        service_account: Optional[str] = "",
+        network: Optional[str] = "",
         project: Optional[str] = None,
         location: Optional[str] = None,
         experiment: Optional[str] = "",
@@ -163,23 +163,36 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
             training_jobs: Required. A dict mapping name to a dict of training job inputs.
             pipeline_root (str):
                 Required. The GCS directory to store output from the model comparison PipelineJob.
-            data_source_csv_filenames: Paths to CSVs stored in GCS to use as the dataset
-                for all training pipelines. This should be None if
-                `data_source_bigquery_table_path` is not None.
+            data_source_csv_filenames: Comma-separated paths to CSVs stored in GCS to
+                use as the training dataset for all training pipelines. This should be
+                None if `data_source_bigquery_table_path` is not None. This should only
+                contain data from the training and validation split and not from the test
+                split.
             data_source_bigquery_table_path: Path to BigQuery Table to use as the
-                dataset for all training pipelines. This should be None if
-                `data_source_csv_filenames` is not None.
+                training dataset for all training pipelines. This should be None if
+                `data_source_csv_filenames` is not None. This should only contain data
+                from the training and validation split and not from the test split.
+            evaluation_data_source_csv_filenames: Comma-separated paths to CSVs stored
+                in GCS to use as the evaluation dataset for all training pipelines. This
+                should be None if `evaluation_data_source_bigquery_table_path` is not
+                None. This should only contain data from the test split and not from the
+                training and validation split.
+            evaluation_data_source_bigquery_table_path: Path to BigQuery Table to use as
+                the evaluation dataset for all training pipelines. This should be None if
+                `evaluation_data_source_csv_filenames` is not None. This should only
+                contain data from the test split and not from the training and validation
+                split.
             job_id (str):
                 Optional. The unique ID of the job run.
                 If not specified, pipeline name + timestamp will be used.
             comparison_pipeline_display_name (str)
                 Optional. The user-defined name of the PipelineJob created by this Pipeline Based Service.
             service_account (str):
-                Specifies the service account for workload run-as account for this Model Comparison PipelineJob.
+                Specifies the service account for workload run-as account for this Model Comparison PipelineJob and its subpipelines.
                 Users submitting jobs must have act-as permission on this run-as account. The service account running
                 this Model Comparison job needs the following permissions: Storage Admin, Vertex AI User.
             network (str):
-                The full name of the Compute Engine network to which the job
+                The full name of the Compute Engine network to which the job and sub pipelines
                 should be peered. For example, projects/12345/global/networks/myVPC.
                 Private services access must already be configured for the network.
                 If left unspecified, the job is not peered with any network.
@@ -197,7 +210,19 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
 
         if bool(data_source_csv_filenames) == bool(data_source_bigquery_table_path):
             raise ValueError(
-                f"Exactly one data source parameter should be set. data_source_csv_filenames={data_source_csv_filenames}, data_source_bigquery_table_path={data_source_bigquery_table_path}"
+                "Exactly one data source parameter should be set. data_source_csv_filenames=%s, data_source_bigquery_table_path=%s"
+                % (data_source_csv_filenames, data_source_bigquery_table_path)
+            )
+
+        if bool(evaluation_data_source_csv_filenames) == bool(
+            evaluation_data_source_bigquery_table_path
+        ):
+            raise ValueError(
+                "Exactly one data source parameter should be set. evaluation_data_source_csv_filenames=%s, evaluation_data_source_bigquery_table_path=%s"
+                % (
+                    evaluation_data_source_csv_filenames,
+                    evaluation_data_source_bigquery_table_path,
+                )
             )
 
         if not comparison_pipeline_display_name:
@@ -211,7 +236,11 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
             "training_jobs": training_jobs,
             "data_source_csv_filenames": data_source_csv_filenames,
             "data_source_bigquery_table_path": data_source_bigquery_table_path,
+            "evaluation_data_source_csv_filenames": evaluation_data_source_csv_filenames,
+            "evaluation_data_source_bigquery_table_path": evaluation_data_source_bigquery_table_path,
             "experiment": experiment,
+            "service_account": service_account,
+            "network": network,
         }
 
         template_url = cls.get_template_url(MODEL_COMPARISON_PIPELINE)
