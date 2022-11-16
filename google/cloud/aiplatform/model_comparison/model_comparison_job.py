@@ -130,7 +130,7 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
     @classmethod
     def submit(
         cls,
-        problem_type: str,
+        prediction_type: str,
         training_jobs: Dict[str, Dict[str, Any]],
         pipeline_root: str,
         data_source_csv_filenames: str = "",
@@ -150,7 +150,7 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
 
         Example usage:
         my_comparison = _ModelComparisonJob.submit(
-            problem_type='tabular',
+            prediction_type='forecasting',
             training_jobs={},
             data_source_bigquery_table_path=bq:,
             data_source_csv_filenames='',
@@ -158,8 +158,8 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
         )
 
         Args:
-            problem_type: Required. The type of problem being solved. Can be one of: regression,
-                binary_classification, multiclass_classification, or forecasting
+            prediction_type: The type of problem being solved. Can be one of:
+                regression, classification, or forecasting.
             training_jobs: Required. A dict mapping name to a dict of training job inputs.
             pipeline_root (str):
                 Required. The GCS directory to store output from the model comparison PipelineJob.
@@ -232,7 +232,7 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
             "project": project or initializer.global_config.project,
             "location": location or initializer.global_config.location,
             "root_dir": pipeline_root,
-            "problem_type": problem_type,
+            "prediction_type": prediction_type,
             "training_jobs": training_jobs,
             "data_source_csv_filenames": data_source_csv_filenames,
             "data_source_bigquery_table_path": data_source_bigquery_table_path,
