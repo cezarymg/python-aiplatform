@@ -57,6 +57,7 @@ _TEST_BQ_DATASET = "bq://test-data.train"
 _TEST_CSV_DATASET = (
     "gs://cloud-samples-data/vertex-ai/tabular-workflows/datasets/safe-driver/train.csv"
 )
+_TEST_PREDICTION_TYPE = "forecasting"
 _TEST_CREDENTIALS = auth_credentials.AnonymousCredentials()
 _TEST_COMPONENT_IDENTIFIER = "fpc-structured-data"
 _TEST_PIPELINE_NAME_IDENTIFIER = "model-comparison"
@@ -289,7 +290,7 @@ class TestModelComparisonJob:
             experiment=_TEST_EXPERIMENT,
             location=_TEST_LOCATION,
             pipeline_root=_TEST_GCS_BUCKET_NAME,
-            prediction_type="forecasting",
+            prediction_type=_TEST_PREDICTION_TYPE,
             project=_TEST_PROJECT,
             training_jobs={},
             job_id=_TEST_PIPELINE_JOB_ID,
@@ -303,7 +304,7 @@ class TestModelComparisonJob:
         expected_runtime_config_dict = {
             "gcsOutputDirectory": _TEST_GCS_BUCKET_NAME,
             "parameters": {
-                "prediction_type": {"stringValue": "forecasting"},
+                "prediction_type": {"stringValue": _TEST_PREDICTION_TYPE},
                 "project": {"stringValue": _TEST_PROJECT},
                 "location": {"stringValue": _TEST_LOCATION},
                 "root_dir": {"stringValue": _TEST_GCS_BUCKET_NAME},
@@ -360,7 +361,7 @@ class TestModelComparisonJob:
                 experiment=_TEST_EXPERIMENT,
                 location=_TEST_LOCATION,
                 pipeline_root=_TEST_GCS_BUCKET_NAME,
-                prediction_type="forecasting",
+                prediction_type=_TEST_PREDICTION_TYPE,
                 project=_TEST_PROJECT,
                 training_jobs={},
                 job_id=_TEST_PIPELINE_JOB_ID,
@@ -378,7 +379,7 @@ class TestModelComparisonJob:
                 experiment=_TEST_EXPERIMENT,
                 location=_TEST_LOCATION,
                 pipeline_root=_TEST_GCS_BUCKET_NAME,
-                prediction_type="forecasting",
+                prediction_type=_TEST_PREDICTION_TYPE,
                 project=_TEST_PROJECT,
                 training_jobs={},
                 job_id=_TEST_PIPELINE_JOB_ID,
@@ -394,7 +395,7 @@ class TestModelComparisonJob:
                 experiment=_TEST_EXPERIMENT,
                 location=_TEST_LOCATION,
                 pipeline_root=_TEST_GCS_BUCKET_NAME,
-                prediction_type="forecasting",
+                prediction_type=_TEST_PREDICTION_TYPE,
                 project=_TEST_PROJECT,
                 training_jobs={},
                 job_id=_TEST_PIPELINE_JOB_ID,
@@ -412,7 +413,7 @@ class TestModelComparisonJob:
                 experiment=_TEST_EXPERIMENT,
                 location=_TEST_LOCATION,
                 pipeline_root=_TEST_GCS_BUCKET_NAME,
-                prediction_type="forecasting",
+                prediction_type=_TEST_PREDICTION_TYPE,
                 project=_TEST_PROJECT,
                 training_jobs={},
                 job_id=_TEST_PIPELINE_JOB_ID,
@@ -452,7 +453,7 @@ class TestModelComparisonJob:
             experiment=_TEST_EXPERIMENT,
             location=_TEST_LOCATION,
             pipeline_root=_TEST_GCS_BUCKET_NAME,
-            prediction_type="forecasting",
+            prediction_type=_TEST_PREDICTION_TYPE,
             project=_TEST_PROJECT,
             training_jobs={},
             job_id=_TEST_PIPELINE_JOB_ID,
@@ -501,7 +502,7 @@ class TestModelComparisonJob:
             experiment=_TEST_EXPERIMENT,
             location=_TEST_LOCATION,
             pipeline_root=_TEST_GCS_BUCKET_NAME,
-            prediction_type="forecasting",
+            prediction_type=_TEST_PREDICTION_TYPE,
             project=_TEST_PROJECT,
             training_jobs={},
             job_id=_TEST_PIPELINE_JOB_ID,
@@ -536,7 +537,7 @@ class TestModelComparisonJob:
             experiment=_TEST_EXPERIMENT,
             location=_TEST_LOCATION,
             pipeline_root=_TEST_GCS_BUCKET_NAME,
-            prediction_type="forecasting",
+            prediction_type=_TEST_PREDICTION_TYPE,
             project=_TEST_PROJECT,
             training_jobs={},
             job_id=_TEST_PIPELINE_JOB_ID,
