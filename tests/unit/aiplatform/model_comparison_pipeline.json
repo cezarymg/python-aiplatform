@@ -124,14 +124,15 @@
                 "name": "comp-bigquery-create-dataset"
               },
               "dependentTasks": [
-                "generate-iso8601-underscore-datetime-format"
+                "generate-iso8601-underscore-datetime-format",
+                "get-table-location"
               ],
               "inputs": {
                 "parameters": {
                   "dataset": {
                     "runtimeValue": {
                       "constantValue": {
-                        "stringValue": "model_leaderboard_tmp_{{$.inputs.parameters['pipelineparam--generate-iso8601-underscore-datetime-format-Output']}}"
+                        "stringValue": "model_comparison_tmp_{{$.inputs.parameters['pipelineparam--generate-iso8601-underscore-datetime-format-Output']}}"
                       }
                     }
                   },
@@ -143,7 +144,10 @@
                     }
                   },
                   "location": {
-                    "componentInputParameter": "pipelineparam--location"
+                    "taskOutputParameter": {
+                      "outputParameterKey": "Output",
+                      "producerTask": "get-table-location"
+                    }
                   },
                   "pipelineparam--generate-iso8601-underscore-datetime-format-Output": {
                     "taskOutputParameter": {
@@ -207,6 +211,7 @@
               },
               "dependentTasks": [
                 "bigquery-create-dataset",
+                "get-table-location",
                 "validate-inputs"
               ],
               "inputs": {
@@ -224,7 +229,10 @@
                     "componentInputParameter": "pipelineparam--evaluation_data_source_csv_filenames"
                   },
                   "location": {
-                    "componentInputParameter": "pipelineparam--location"
+                    "taskOutputParameter": {
+                      "outputParameterKey": "Output",
+                      "producerTask": "get-table-location"
+                    }
                   },
                   "project": {
                     "componentInputParameter": "pipelineparam--project"
@@ -336,6 +344,30 @@
               },
               "taskInfo": {
                 "name": "get-experiment"
+              }
+            },
+            "get-table-location": {
+              "cachingOptions": {
+                "enableCache": true
+              },
+              "componentRef": {
+                "name": "comp-get-table-location"
+              },
+              "inputs": {
+                "parameters": {
+                  "default_location": {
+                    "componentInputParameter": "pipelineparam--location"
+                  },
+                  "project": {
+                    "componentInputParameter": "pipelineparam--project"
+                  },
+                  "table": {
+                    "componentInputParameter": "pipelineparam--data_source_bigquery_table_path"
+                  }
+                }
+              },
+              "taskInfo": {
+                "name": "get-table-location"
               }
             },
             "validate-inputs": {
@@ -550,6 +582,29 @@
           }
         }
       },
+      "comp-get-table-location": {
+        "executorLabel": "exec-get-table-location",
+        "inputDefinitions": {
+          "parameters": {
+            "default_location": {
+              "type": "STRING"
+            },
+            "project": {
+              "type": "STRING"
+            },
+            "table": {
+              "type": "STRING"
+            }
+          }
+        },
+        "outputDefinitions": {
+          "parameters": {
+            "Output": {
+              "type": "STRING"
+            }
+          }
+        }
+      },
       "comp-run-pipeline": {
         "executorLabel": "exec-run-pipeline",
         "inputDefinitions": {
@@ -673,7 +728,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef build_jobs_parameters(\n    project: str,\n    location: str,\n    training_jobs: Dict[str, Dict[str, Any]],\n    data_source_csv_filenames: str,\n    data_source_bigquery_table_path: str) -> List[Dict[str, Any]]:\n  \"\"\"Prepares a list of dictionaries with name and parameters for each sub-pipeline job.\n\n  Args:\n    project:\n      The GCP project parameter that should be passed to all the jobs.\n    location:\n      The GCP location parameter that should be passed to all the jobs.\n    training_jobs:\n      Dictionary of jobs with their parameters.\n    data_source_csv_filenames:\n      Data source parameter that should be passed to all the jobs\n    data_source_bigquery_table_path:\n      Data source parameter that should be passed to all the jobs\n\n  Returns:\n    A list of dictionaries with two keys. The keys are 'model_name' - the\n    original key from the training_jobs dictionary and 'job_params' the value\n    associated with that key.\n  \"\"\"\n\n  # TODO(b/221603586): Remove these if blocks.\n  # Some pipelines don't interpret dashes as missing values.\n  if data_source_csv_filenames == '-':\n    data_source_csv_filenames = ''\n  if data_source_bigquery_table_path == '-':\n    data_source_bigquery_table_path = ''\n\n  for job in training_jobs:\n    training_jobs[job]['parameter_values'].update({\n        'project': project,\n        'location': location,\n        'data_source_csv_filenames': data_source_csv_filenames,\n        'data_source_bigquery_table_path': data_source_bigquery_table_path\n    })\n\n  return [{'model_name': k, 'job_params': v} for k, v in training_jobs.items()]\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef build_jobs_parameters(\n    project: str,\n    location: str,\n    training_jobs: Dict[str, Dict[str, Any]],\n    data_source_csv_filenames: str,\n    data_source_bigquery_table_path: str) -> List[Dict[str, Any]]:\n  \"\"\"Prepares a list of dictionaries with name and parameters for each sub-pipeline job.\n\n  Args:\n    project:\n      The GCP project parameter that should be passed to all the jobs.\n    location:\n      The GCP location parameter that should be passed to all the jobs.\n    training_jobs:\n      Dictionary of jobs with their parameters.\n    data_source_csv_filenames:\n      Data source parameter that should be passed to all the jobs\n    data_source_bigquery_table_path:\n      Data source parameter that should be passed to all the jobs\n\n  Returns:\n    A list of dictionaries with two keys. The keys are 'model_name' - the\n    original key from the training_jobs dictionary and 'job_params' the value\n    associated with that key.\n  \"\"\"\n\n  # TODO(b/221603586): Remove these if blocks.\n  # Some pipelines don't interpret dashes as missing values.\n  if data_source_csv_filenames == '-':\n    data_source_csv_filenames = ''\n  if data_source_bigquery_table_path == '-':\n    data_source_bigquery_table_path = ''\n\n  # Tabular Workflows pipelines expect a schema for BigQuery URIs.\n  if (\n      data_source_bigquery_table_path\n      and not data_source_bigquery_table_path.startswith('bq://')\n      and not data_source_bigquery_table_path.startswith('bigquery://')\n  ):\n    data_source_bigquery_table_path = f'bq://{data_source_bigquery_table_path}'\n\n  for job in training_jobs:\n    training_jobs[job]['parameter_values'].update({\n        'project': project,\n        'location': location,\n        'data_source_csv_filenames': data_source_csv_filenames,\n        'data_source_bigquery_table_path': data_source_bigquery_table_path\n    })\n\n  return [{'model_name': k, 'job_params': v} for k, v in training_jobs.items()]\n\n"
             ],
             "image": "python:3.8-slim"
           }
@@ -693,7 +748,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef concatenate_data(\n    project: str,\n    location: str,\n    tmp_dataset_name: str,\n    data_source_csv_filenames: Optional[str] = None,\n    data_source_bigquery_table_path: Optional[str] = None,\n    evaluation_data_source_csv_filenames: Optional[str] = None,\n    evaluation_data_source_bigquery_table_path: Optional[str] = None,\n) -> NamedTuple('Outputs', [\n    ('data_source_csv_filenames', str),\n    ('data_source_bigquery_table_path', str),\n]):\n  \"\"\"Concatenate input and evaluation data sources together.\n\n  Args:\n    project: The GCP project that runs the pipeline components.\n    location: The GCP region that runs the pipeline components.\n    tmp_dataset_name: The name of the tmp dataset to create the unioned table.\n    data_source_csv_filenames: Comma-separated paths to CSVs stored in GCS to\n      use as the dataset for all training pipelines. This should be None if\n      `data_source_bigquery_table_path` is not None. This should only contain\n      data from the training and validation split and not from the test split.\n    data_source_bigquery_table_path: Path to BigQuery Table to use as the\n      dataset for all training pipelines. This should be None if\n      `data_source_csv_filenames` is not None. This should only contain data\n      from the training and validation split and not from the test split.\n    evaluation_data_source_csv_filenames: Comma-separated paths to CSVs stored\n      in GCS to use as the evaluation dataset for all training pipelines. This\n      should be None if `evaluation_data_source_bigquery_table_path` is not\n      None. This should only contain data from the test split and not from the\n      training and validation split.\n    evaluation_data_source_bigquery_table_path: Path to BigQuery Table to use as\n      the evaluation dataset for all training pipelines. This should be None if\n      `evaluation_data_source_csv_filenames` is not None. This should only\n      contain data from the test split and not from the training and validation\n      split.\n\n  Returns:\n    Concatenated csv and bigquery paths.\n  \"\"\"\n\n  # pylint: disable=g-import-not-at-top,import-outside-toplevel\n  import collections\n  import uuid\n\n  from google.cloud import bigquery\n  # pylint: enable=g-import-not-at-top,import-outside-toplevel\n  if data_source_csv_filenames == '-':\n    data_source_csv_filenames = None\n  if data_source_bigquery_table_path == '-':\n    data_source_bigquery_table_path = None\n  if evaluation_data_source_csv_filenames == '-':\n    evaluation_data_source_csv_filenames = None\n  if evaluation_data_source_bigquery_table_path == '-':\n    evaluation_data_source_bigquery_table_path = None\n\n  if data_source_csv_filenames and evaluation_data_source_csv_filenames:\n    return collections.namedtuple('Outputs', [\n        'data_source_csv_filenames',\n        'data_source_bigquery_table_path',\n    ])(\n        data_source_csv_filenames + ',' + evaluation_data_source_csv_filenames,\n        '-',\n    )\n\n  client = bigquery.Client(project=project, location=location)\n  bq_table_names = [\n      data_source_bigquery_table_path,\n      evaluation_data_source_bigquery_table_path\n  ]\n  for i in range(len(bq_table_names)):\n    table_uri = bq_table_names[i]\n    if table_uri.startswith('bq://'):\n      table_uri = table_uri[len('bq://'):]\n    elif table_uri.startswith('bigquery://'):\n      table_uri = table_uri[len('bigquery://'):]\n\n    bq_table_names[i] = table_uri\n\n  data_source_bigquery_table_path = bq_table_names[0]\n  evaluation_data_source_bigquery_table_path = bq_table_names[1]\n\n  final_table_id = (f'{project}.{tmp_dataset_name}'\n                    f'.model_leaderboard_unioned_table_{uuid.uuid4().hex[-4:]}')\n\n  union_query = f\"\"\"\n      CREATE TABLE `{final_table_id}` AS (\n        SELECT * FROM `{data_source_bigquery_table_path}`\n        UNION ALL\n        SELECT * FROM `{evaluation_data_source_bigquery_table_path}`\n      )\n  \"\"\"\n  client.query(union_query).result()\n\n  return collections.namedtuple('Outputs', [\n      'data_source_csv_filenames',\n      'data_source_bigquery_table_path',\n  ])(\n      '-',\n      final_table_id,\n  )\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef concatenate_data(\n    project: str,\n    location: str,\n    tmp_dataset_name: str,\n    data_source_csv_filenames: Optional[str] = None,\n    data_source_bigquery_table_path: Optional[str] = None,\n    evaluation_data_source_csv_filenames: Optional[str] = None,\n    evaluation_data_source_bigquery_table_path: Optional[str] = None,\n) -> NamedTuple('Outputs', [\n    ('data_source_csv_filenames', str),\n    ('data_source_bigquery_table_path', str),\n]):\n  \"\"\"Concatenate input and evaluation data sources together.\n\n  Args:\n    project: The GCP project that runs the pipeline components.\n    location: The GCP region that runs the BigQuery queries.\n    tmp_dataset_name: The name of the tmp dataset to create the unioned table.\n    data_source_csv_filenames: Comma-separated paths to CSVs stored in GCS to\n      use as the dataset for all training pipelines. This should be None if\n      `data_source_bigquery_table_path` is not None. This should only contain\n      data from the training and validation split and not from the test split.\n    data_source_bigquery_table_path: Path to BigQuery Table to use as the\n      dataset for all training pipelines. This should be None if\n      `data_source_csv_filenames` is not None. This should only contain data\n      from the training and validation split and not from the test split.\n    evaluation_data_source_csv_filenames: Comma-separated paths to CSVs stored\n      in GCS to use as the evaluation dataset for all training pipelines. This\n      should be None if `evaluation_data_source_bigquery_table_path` is not\n      None. This should only contain data from the test split and not from the\n      training and validation split.\n    evaluation_data_source_bigquery_table_path: Path to BigQuery Table to use as\n      the evaluation dataset for all training pipelines. This should be None if\n      `evaluation_data_source_csv_filenames` is not None. This should only\n      contain data from the test split and not from the training and validation\n      split.\n\n  Returns:\n    Concatenated csv and bigquery paths.\n  \"\"\"\n\n  # pylint: disable=g-import-not-at-top,import-outside-toplevel\n  import collections\n  import uuid\n\n  from google.cloud import bigquery\n  # pylint: enable=g-import-not-at-top,import-outside-toplevel\n  if data_source_csv_filenames == '-':\n    data_source_csv_filenames = None\n  if data_source_bigquery_table_path == '-':\n    data_source_bigquery_table_path = None\n  if evaluation_data_source_csv_filenames == '-':\n    evaluation_data_source_csv_filenames = None\n  if evaluation_data_source_bigquery_table_path == '-':\n    evaluation_data_source_bigquery_table_path = None\n\n  if data_source_csv_filenames and evaluation_data_source_csv_filenames:\n    return collections.namedtuple('Outputs', [\n        'data_source_csv_filenames',\n        'data_source_bigquery_table_path',\n    ])(\n        data_source_csv_filenames + ',' + evaluation_data_source_csv_filenames,\n        '-',\n    )\n\n  client = bigquery.Client(project=project, location=location)\n  bq_table_names = [\n      data_source_bigquery_table_path,\n      evaluation_data_source_bigquery_table_path\n  ]\n  for i in range(len(bq_table_names)):\n    table_uri = bq_table_names[i]\n    if table_uri.startswith('bq://'):\n      table_uri = table_uri[len('bq://'):]\n    elif table_uri.startswith('bigquery://'):\n      table_uri = table_uri[len('bigquery://'):]\n\n    bq_table_names[i] = table_uri\n\n  data_source_bigquery_table_path = bq_table_names[0]\n  evaluation_data_source_bigquery_table_path = bq_table_names[1]\n\n  final_table_id = (f'{project}.{tmp_dataset_name}'\n                    f'.model_comparison_unioned_table_{uuid.uuid4().hex[-4:]}')\n\n  union_query = f\"\"\"\n      CREATE TABLE `{final_table_id}` AS (\n        SELECT * FROM `{data_source_bigquery_table_path}`\n        UNION ALL\n        SELECT * FROM `{evaluation_data_source_bigquery_table_path}`\n      )\n  \"\"\"\n  client.query(union_query).result()\n\n  return collections.namedtuple('Outputs', [\n      'data_source_csv_filenames',\n      'data_source_bigquery_table_path',\n  ])(\n      '-',\n      final_table_id,\n  )\n\n"
             ],
             "image": "python:3.8-slim"
           }
@@ -736,6 +791,26 @@
               "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef get_experiment(\n    project: str, location: str, experiment_name: Optional[str],\n    experiment: dsl.Output[dsl.Artifact]\n) -> NamedTuple('Outputs', [('experiment_name', str)]):\n  \"\"\"Returns a Vertex AI experiment name under which to run the pipelines.\n\n  Args:\n    project:\n      The GCP project in which the experiment will be created.\n    location:\n      The GCP location in which the experiment will be created.\n    experiment_name:\n      Dictionary of jobs with their parameters.\n    experiment:\n      Output artifact containing experiment name and cloud console URL.\n\n  Returns:\n    A NamedTuple with the name of the created experiment.\n\n  \"\"\"\n  # pylint: disable=g-import-not-at-top,import-outside-toplevel,redefined-outer-name,reimported\n  import datetime\n  import logging\n  import uuid\n  from google.cloud import aiplatform\n  # pylint: enable=g-import-not-at-top,import-outside-toplevel,redefined-outer-name,reimported\n\n  if not experiment_name or experiment_name == '-':\n    experiment_datetime = datetime.datetime.now().strftime(\n        '%Y-%m-%d')\n    experiment_name = f'model-comparison-{experiment_datetime}-{uuid.uuid4().hex[-4:]}'\n\n  aiplatform.Experiment.get_or_create(\n      experiment_name=experiment_name, project=project, location=location)\n\n  experiment_ui_url = f'https://console.cloud.google.com/vertex-ai/locations/{location}/experiments/{experiment_name}?project={project}'\n  logging.info(\n      'Using experiment %s. Access it at %s',\n      experiment_name, experiment_ui_url\n  )\n\n  experiment.metadata = {\n      'experiment_name': experiment_name\n  }\n  experiment.uri = experiment_ui_url\n\n  return (experiment_name,)\n\n"
             ],
             "image": "python:3.8-slim"
+          }
+        },
+        "exec-get-table-location": {
+          "container": {
+            "args": [
+              "--executor_input",
+              "{{$}}",
+              "--function_to_execute",
+              "get_table_location"
+            ],
+            "command": [
+              "sh",
+              "-c",
+              "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet     --no-warn-script-location 'google-cloud-bigquery==2.24.1' 'kfp==1.8.14' && \"$0\" \"$@\"\n",
+              "sh",
+              "-ec",
+              "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef get_table_location(\n    project: str,\n    table: Optional[str],\n    default_location: str = '',\n) -> str:\n  \"\"\"Returns the region the given table belongs to.\n\n  Args:\n    project: The GCP project.\n    table: The BigQuery table to get a row count for.\n    default_location: Location to return if no table was given.\n\n  Returns:\n    A GCP region or multi-region.\n  \"\"\"\n  # pylint: disable=g-import-not-at-top,import-outside-toplevel,redefined-outer-name,reimported\n  from google.cloud import bigquery\n  # pylint: enable=g-import-not-at-top,import-outside-toplevel,redefined-outer-name,reimported\n\n  if not table or table == '-':\n    return default_location\n\n  client = bigquery.Client(project=project)\n  if table.startswith('bq://'):\n    table = table[len('bq://'):]\n  elif table.startswith('bigquery://'):\n    table = table[len('bigquery://'):]\n  return client.get_table(table).location\n\n"
+            ],
+            "image": "python:3.7-slim"
           }
         },
         "exec-run-pipeline": {
@@ -798,7 +873,7 @@
                 "dataset_prefix": {
                   "runtimeValue": {
                     "constantValue": {
-                      "stringValue": "model_leaderboard_tmp_{{$.pipeline_job_uuid}}"
+                      "stringValue": "model_comparison_tmp_{{$.pipeline_job_uuid}}"
                     }
                   }
                 },
