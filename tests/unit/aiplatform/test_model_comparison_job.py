@@ -548,12 +548,9 @@ class TestModelComparisonJob:
         assert test_model_comparison_job.get_model_comparison_results() is None
 
     @pytest.mark.parametrize("pipeline", [
-        (ModelComparisonJob.MODEL_COMPARISON_PIPELINE,
-         "tabular/model_comparison_pipeline.json"),
-        (ModelComparisonJob.BQML_ARIMA_TRAIN_PIPELINE,
-         "forecasting/bqml_arima_train_pipeline.json"),
-        (ModelComparisonJob.AUTOML_TABULAR_PIPELINE,
-         "tabular/automl_tabular_pipeline.json"),
+        ("model_comparison", "tabular/model_comparison_pipeline.json"),
+        ("bqml_arima_train", "forecasting/bqml_arima_train_pipeline.json"),
+        ("automl_tabular", "tabular/automl_tabular_pipeline.json"),
     ])
     def test_get_template_url(self, pipeline: Tuple[str, str]):
       pipeline_id, path = pipeline
