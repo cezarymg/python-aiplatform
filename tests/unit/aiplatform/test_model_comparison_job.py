@@ -561,6 +561,5 @@ class TestModelComparisonJob:
       expected = (
           "https://raw.githubusercontent.com/kubeflow/pipelines/"
           "google-cloud-pipeline-components-abc/components/google-cloud/"
-          "google_cloud_pipeline_components/experimental/automl/"
-          path)
+          "google_cloud_pipeline_components/experimental/automl/" + path)
       assert expected == actual
