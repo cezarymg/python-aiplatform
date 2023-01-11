@@ -548,16 +548,16 @@ class TestModelComparisonJob:
         assert test_model_comparison_job.get_model_comparison_results() is None
 
     @pytest.mark.parametrize("pipeline", [
-        (_ModelComparisonJob.MODEL_COMPARISON_PIPELINE,
+        (ModelComparisonJob.MODEL_COMPARISON_PIPELINE,
          "tabular/model_comparison_pipeline.json"),
-        (_ModelComparisonJob.BQML_ARIMA_TRAIN_PIPELINE,
+        (ModelComparisonJob.BQML_ARIMA_TRAIN_PIPELINE,
          "forecasting/bqml_arima_train_pipeline.json"),
-        (_ModelComparisonJob.AUTOML_TABULAR_PIPELINE,
+        (ModelComparisonJob.AUTOML_TABULAR_PIPELINE,
          "tabular/automl_tabular_pipeline.json"),
     ])
     def test_get_template_url(self, pipeline: Tuple[str, str]):
       pipeline_id, path = pipeline
-      actual = _ModelComparisonJob.get_template_url(pipeline_id, version="abc")
+      actual = ModelComparisonJob.get_template_url(pipeline_id, version="abc")
       expected = (
           "https://raw.githubusercontent.com/kubeflow/pipelines/"
           "google-cloud-pipeline-components-abc/components/google-cloud/"
