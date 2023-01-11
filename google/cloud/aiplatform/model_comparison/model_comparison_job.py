@@ -22,8 +22,8 @@ from google.auth import credentials as auth_credentials
 from google.cloud import aiplatform
 from google.cloud.aiplatform import base
 from google.cloud.aiplatform import initializer
-from google.cloud.aiplatform._pipeline_based_service import pipeline_based_service
 from google.cloud.aiplatform import pipeline_jobs
+from google.cloud.aiplatform._pipeline_based_service import pipeline_based_service
 
 from google.cloud.aiplatform.compat.types import (
     pipeline_state_v1 as gca_pipeline_state_v1,
@@ -33,22 +33,34 @@ _LOGGER = base.Logger(__name__)
 
 MODEL_COMPARISON_PIPELINE = "model_comparison"
 BQML_ARIMA_TRAIN_PIPELINE = "bqml_arima_train"
+PROPHET_TRAINER_PIPELINE = "prophet_trainer"
 AUTOML_TABULAR_PIPELINE = "automl_tabular"
+TABNET_TRAINER_PIPELINE = "tabnet_trainer"
+TABNET_HYPERPARAMETER_TUNING_JOB_PIPELINE = "tabnet_hyperparameter_tuning_job"
+WIDE_AND_DEEP_TRAINER_PIPELINE = "wide_and_deep_trainer"
+WIDE_AND_DEEP_HYPERPARAMETER_TUNING_JOB_PIPELINE = "wide_and_deep_hyparameter_tuning_job"
 
+_PIPELINE_TEMPLATE_REPO = (
+    "https://raw.githubusercontent.com/kubeflow/pipelines/"
+    "google-cloud-pipeline-components-{version}/components/google-cloud/"
+    "google_cloud_pipeline_components/experimental/automl/")
 _PIPELINE_TEMPLATES = {
-    MODEL_COMPARISON_PIPELINE: (
-        "https://raw.githubusercontent.com/cezarymg/python-aiplatform/model_comparison_exp/tests/unit/aiplatform/model_comparison_pipeline.json"
-    ),
     BQML_ARIMA_TRAIN_PIPELINE: (
-        "https://raw.githubusercontent.com/kubeflow/pipelines/master"
-        "/components/google-cloud/google_cloud_pipeline_components/experimental/automl/forecasting"
-        "/bqml_arima_train_pipeline.json"
-    ),
+        _PIPELINE_TEMPLATE_REPO + "forecasting/bqml_arima_train_pipeline.json"),
+    PROPHET_TRAINER_PIPELINE: (
+        _PIPELINE_TEMPLATE_REPO + "forecasting/prophet_trainer_pipeline.json"),
     AUTOML_TABULAR_PIPELINE: (
-        "https://raw.githubusercontent.com/kubeflow/pipelines/06761b945055595de159238bfb00b09822f80520"
-        "/components/google-cloud/google_cloud_pipeline_components/experimental/automl/tabular"
-        "/automl_tabular_pipeline.json"
-    ),
+        _PIPELINE_TEMPLATE_REPO + "tabular/automl_tabular_pipeline.json"),
+    TABNET_TRAINER_PIPELINE: (
+        _PIPELINE_TEMPLATE_REPO + "tabular/tabnet_trainer_pipeline.json"),
+    TABNET_HYPERPARAMETER_TUNING_JOB_PIPELINE: (
+        _PIPELINE_TEMPLATE_REPO + "tabular/tabnet_hyperparameter_tuning_job_pipeline.json"),
+    WIDE_AND_DEEP_TRAINER_PIPELINE: (
+        _PIPELINE_TEMPLATE_REPO + "tabular/wide_and_deep_trainer_pipeline.json"),
+    WIDE_AND_DEEP_HYPERPARAMETER_TUNING_JOB_PIPELINE: (
+        _PIPELINE_TEMPLATE_REPO + "tabular/wide_and_deep_hyperparameter_tuning_job_pipeline.json"),
+    MODEL_COMPARISON_PIPELINE: (
+        _PIPELINE_TEMPLATE_REPO + "tabular/model_comparison_pipeline.json"),
 }
 
 
@@ -114,18 +126,23 @@ class ModelComparisonJob(pipeline_based_service._VertexAiPipelineBasedService):
     @staticmethod
     def get_template_url(
         pipeline: str,
+        version: str = "1.0.32",
     ) -> str:
         """Gets the pipeline template URL for a given pipeline.
 
         Args:
             pipeline (str):
                 Required. Pipeline name.
+            version (str):
+                Optional. Google Cloud Pipeline Components version that hosts
+                the pipeline.
 
         Returns:
             (str): The pipeline template URL.
         """
 
-        return ModelComparisonJob._template_ref.get(pipeline)
+        template_uri = ModelComparisonJob._template_ref.get(pipeline)
+        return template_uri.format(version=version)
 
     @classmethod
     def submit(

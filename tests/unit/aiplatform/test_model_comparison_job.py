@@ -21,6 +21,7 @@ import yaml
 import json
 import pytest
 import test_metadata
+from typing import Tuple
 from unittest import mock
 
 from google.auth import credentials as auth_credentials
@@ -545,3 +546,17 @@ class TestModelComparisonJob:
         )
 
         assert test_model_comparison_job.get_model_comparison_results() is None
+
+    @pytest.mark.parametrize("pipeline", [
+        ("model_comparison", "tabular/model_comparison_pipeline.json"),
+        ("bqml_arima_train", "forecasting/bqml_arima_train_pipeline.json"),
+        ("automl_tabular", "tabular/automl_tabular_pipeline.json"),
+    ])
+    def test_get_template_url(self, pipeline: Tuple[str, str]):
+      pipeline_id, path = pipeline
+      actual = ModelComparisonJob.get_template_url(pipeline_id, version="abc")
+      expected = (
+          "https://raw.githubusercontent.com/kubeflow/pipelines/"
+          "google-cloud-pipeline-components-abc/components/google-cloud/"
+          "google_cloud_pipeline_components/experimental/automl/" + path)
+      assert expected == actual
